@@ -20,8 +20,10 @@ Findings from testing on Android (2026-11-23):
 1. A host typed in settings works with no `Internet` domain declared. The phone asks the user to allow
    the host the first time it is used (tested against webhook.site). CONFIRMED.
 2. Custom request headers arrive at the receiver, along with the JSON body (`text`, `timestamp`, `source`). CONFIRMED.
-3. Triggering `send_message` from the watch: not yet tested. Options are Pebble's Index agent (voice),
-   a timeline pin or notification with a `pluginAction` (`inputArg: "text"`), or a small watchapp.
+3. Triggering `send_message` from the watch: a timeline pin inserted by the plugin
+   (`Pebble.insertTimelinePin`, action `{type: 'pluginAction', action: 'send_message', inputArg: 'text'}`)
+   works. The watch prompts for dictation and the dictated text arrives as `text` in the POST. CONFIRMED.
+   The settings page has an "Add Send note pin" button to create it.
 4. Install: `pebble install build/pebble-webhook.pbw --adb` (file first; `--adb` takes an optional device
    serial and otherwise swallows the path). Needs Android wireless debugging paired with `adb pair`.
    Publish with `pebble publish` when ready.
