@@ -27,6 +27,7 @@ static GBitmap *s_confirm_icons[ICON_COUNT];
 static State s_state = StateIdle;
 static int s_confirm = 0;
 static bool s_quick_launch = false;
+static bool s_dictating = false;
 static time_t s_anim_start_s;
 static uint16_t s_anim_start_ms;
 static char s_message[96];
@@ -116,6 +117,10 @@ static void prv_draw_cross(GContext *ctx, GPoint center, int size, int32_t elaps
   graphics_draw_line(ctx, GPoint(center.x + half, center.y - half), GPoint(center.x - half, center.y + half));
 }
 
+static GRect prv_mic_rect(GRect bounds) {
+  return GRect((bounds.size.w - 80) / 2, bounds.size.h / 2 - 40, 80, 80);
+}
+
 static void prv_canvas_update(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   graphics_context_set_compositing_mode(ctx, GCompOpSet);
@@ -129,12 +134,17 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
   GPoint center = GPoint(bounds.size.w / 2, bounds.size.h * 4 / 10);
   switch (s_state) {
     case StateIdle: {
-      // The microphone in the middle, a short arrow at the Select button, and the user's reminders for Up and Down.
-      int mic_x = (bounds.size.w - 80) / 2;
+      // The microphone in the middle, an arrow toward the Select button, and the user's reminders for Up and Down.
+      GRect mic = prv_mic_rect(bounds);
       int mid = bounds.size.h / 2;
-      graphics_draw_bitmap_in_rect(ctx, s_mic, GRect(mic_x, mid - 40, 80, 80));
-      int select_edge = prv_edge_x(bounds, mid);
-      prv_draw_arrow(ctx, GPoint(select_edge - 20, mid), GPoint(select_edge, mid));
+      graphics_draw_bitmap_in_rect(ctx, s_mic, mic);
+      // The arrow sits halfway between the microphone's drawn edge (it has padding in its 80px box) and the button.
+      int from_x = mic.origin.x + 58;
+      int to_x = prv_edge_x(bounds, mid);
+      int length = (to_x - from_x) * 3 / 5;
+      if (length < 22) length = 22;
+      int middle = (from_x + to_x) / 2;
+      prv_draw_arrow(ctx, GPoint(middle - length / 2, mid), GPoint(middle + length / 2, mid));
       prv_draw_button_label(ctx, bounds, bounds.size.h * 17 / 100, s_up_label);
       prv_draw_button_label(ctx, bounds, bounds.size.h * 83 / 100, s_down_label);
       break;
@@ -251,6 +261,7 @@ static void prv_outbox_failed(DictionaryIterator *iter, AppMessageResult reason,
 }
 
 static void prv_dictation(DictationSession *session, DictationSessionStatus status, char *transcription, void *context) {
+  s_dictating = false;
   if (status == DictationSessionStatusSuccess && transcription && transcription[0]) {
     prv_send(transcription, 0);
     return;
@@ -265,10 +276,21 @@ static void prv_start_dictation(void) {
   s_state = StateIdle;
   prv_set_message("");
   layer_mark_dirty(s_canvas);
+  s_dictating = true;
   dictation_session_start(s_dictation);
 }
 
 static void prv_select(ClickRecognizerRef recognizer, void *context) { prv_start_dictation(); }
+
+#if defined(_PBL_API_EXISTS_touch_service_subscribe)
+// On watches with a touchscreen, tapping the microphone starts a voice note too.
+static void prv_touch(const TouchEvent *event, void *context) {
+  if (event->type != TouchEvent_Touchdown || s_state != StateIdle || s_dictating) return;
+  GRect mic = grect_crop(prv_mic_rect(layer_get_bounds(window_get_root_layer(s_window))), -12);
+  GPoint point = GPoint(event->x, event->y);
+  if (grect_contains_point(&mic, &point)) prv_start_dictation();
+}
+#endif
 
 static void prv_quick_start(void *data) { prv_start_dictation(); }
 
@@ -341,9 +363,15 @@ static void prv_init(void) {
   window_set_window_handlers(s_window, (WindowHandlers) { .load = prv_window_load, .unload = prv_window_unload });
   window_stack_push(s_window, true);
   if (s_quick_launch) app_timer_register(300, prv_quick_start, NULL);
+#if defined(_PBL_API_EXISTS_touch_service_subscribe)
+  if (touch_service_is_enabled()) touch_service_subscribe(prv_touch, NULL);
+#endif
 }
 
 static void prv_deinit(void) {
+#if defined(_PBL_API_EXISTS_touch_service_subscribe)
+  touch_service_unsubscribe();
+#endif
   prv_cancel(&s_frame_timer);
   prv_cancel(&s_reset_timer);
   prv_cancel(&s_timeout_timer);

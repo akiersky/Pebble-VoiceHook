@@ -36,7 +36,10 @@ test('cleanConfig defaults, destinations and commands', () => {
   assert.strictEqual(c.destinations[0].format, 'json');
   assert.strictEqual(c.destinations[0].field, 'text');
   assert.strictEqual(c.noteDestination, 'a');
-  assert.deepStrictEqual(c.commands, { up_single: { command: 'lights_off', destination: 'b' }, down_hold: { command: 'x', destination: 'a' } });
+  assert.deepStrictEqual(c.commands, {
+    up_single: { command: 'lights_off', destination: 'b', headers: [] },
+    down_hold: { command: 'x', destination: 'a', headers: [] },
+  });
   assert.ok(cleanConfig({ destinations: [dest({ field: 'bad field!' })] }).error);
   assert.ok(cleanConfig({ destinations: [dest(), dest()] }).error);
   assert.ok(cleanConfig({ destinations: [dest({ url: 'nope' })] }).error);
@@ -50,6 +53,17 @@ test('cleanConfig keeps a saved header value per destination', () => {
   const previous = { destinations: [dest({ headers: [{ name: 'X-Token', value: 'secret' }] })] };
   const next = cleanConfig({ destinations: [dest({ headers: [{ name: 'X-Token', value: '' }] })] }, previous);
   assert.strictEqual(next.config.destinations[0].headers[0].value, 'secret');
+});
+
+test('command headers are added to the destination headers and keep saved values', () => {
+  const previous = { destinations: [dest()], commands: { up_single: { command: 'x', destination: 'a', headers: [{ name: 'X-Scene', value: 'movie' }] } } };
+  const next = cleanConfig({ destinations: [dest()], commands: { up_single: { command: 'x', destination: 'a', headers: [{ name: 'x-scene', value: '' }, { name: 'X-Other', value: 'o' }] } } }, previous);
+  assert.deepStrictEqual(next.config.commands.up_single.headers, [{ name: 'x-scene', value: 'movie' }, { name: 'X-Other', value: 'o' }]);
+  assert.ok(cleanConfig({ destinations: [dest()], commands: { up_single: { command: 'x', headers: [{ name: 'Host', value: 'h' }] } } }).error);
+
+  const base = { url: 'https://example.com/h', headers: [{ name: 'Authorization', value: 'a' }, { name: 'X-Scene', value: 'default' }], format: 'json', field: 'text' };
+  const request = buildRequest(base, 'command', 'go', new Date(), [{ name: 'x-scene', value: 'movie' }, { name: 'X-New', value: 'n' }]);
+  assert.deepStrictEqual(request.options.headers, { Authorization: 'a', 'x-scene': 'movie', 'X-New': 'n', 'Content-Type': 'application/json' });
 });
 
 test('buildRequest builds JSON, command and text bodies', () => {

@@ -62,10 +62,13 @@
     summary small { color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dest-body { padding: 0 14px 14px; }
     .dest-body input, .dest-body select { background: var(--card); }
-    .command { display: grid; grid-template-columns: 5.5em 1fr; gap: 8px; align-items: center; margin-top: 10px; }
-    .command span { font-size: 14px; color: var(--muted); }
-    .command select { grid-column: 2; }
-    .command input, .command select { padding: 10px 12px; }
+    .command { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px; background: var(--bg); }
+    .command h3 { font-size: 15px; margin: 0 0 10px; }
+    .command label { font-size: 13px; margin: 10px 0 4px; }
+    .command h3 + label { margin-top: 0; }
+    .command input, .command select { padding: 10px 12px; background: var(--card); }
+    .command details { border: 0; background: transparent; margin: 10px 0 0; }
+    .command summary { padding: 4px 0; font-weight: 500; color: var(--muted); font-size: 13px; }
   </style>
 </head>
 <body>
@@ -90,7 +93,7 @@
 
     <section>
       <h2>Voice notes</h2>
-      <label for="noteDestination">Send dictated notes to</label>
+      <label for="noteDestination">Webhook</label>
       <select id="noteDestination"></select>
       <p class="hint">On the watchapp, press Select and speak.</p>
     </section>
@@ -124,8 +127,8 @@
 
   <script>
     var SLOTS = [
-      ['up_single', 'Up'], ['up_double', 'Up ×2'], ['up_hold', 'Up hold'],
-      ['down_single', 'Down'], ['down_double', 'Down ×2'], ['down_hold', 'Down hold']
+      ['up_single', 'Press'], ['up_double', 'Double press'], ['up_hold', 'Hold'],
+      ['down_single', 'Press'], ['down_double', 'Double press'], ['down_hold', 'Hold']
     ];
     var destinationsBox = document.getElementById('destinations');
     var noteSelect = document.getElementById('noteDestination');
@@ -229,21 +232,43 @@
       card.label = function () { return nameInput.value.trim() || 'New destination'; };
       destinationsBox.appendChild(card);
       refreshTitle();
+      return card;
     }
 
     function readDestinations() {
       return Array.prototype.map.call(destinationsBox.children, function (card) { return card.read(); });
     }
 
-    // ----- selects that pick a destination -----
+    function readHeaderRows(box) {
+      return Array.prototype.map.call(box.children, function (row) { return { name: row.children[0].value, value: row.children[1].value }; });
+    }
+
+    // ----- selects that pick a webhook (destination) -----
+    var NEW_WEBHOOK = '__new__';
+
     function fillSelect(select, keep) {
       var chosen = keep !== undefined ? keep : select.value;
+      if (chosen === NEW_WEBHOOK) chosen = select.dataset.prev || '';
       select.replaceChildren();
       Array.prototype.forEach.call(destinationsBox.children, function (card) {
         select.appendChild(el('option', { value: card.dataset.id, textContent: card.label() }));
       });
+      select.appendChild(el('option', { value: NEW_WEBHOOK, textContent: '+ New webhook…' }));
       if (chosen) select.value = chosen;
-      if (!select.value && select.options.length) select.value = select.options[0].value;
+      if (!select.value || select.value === NEW_WEBHOOK) select.value = select.options[0].value;
+      select.dataset.prev = select.value;
+      select.onchange = function () {
+        if (select.value !== NEW_WEBHOOK) { select.dataset.prev = select.value; return; }
+        if (destinationsBox.children.length >= 10) {
+          setStatus('You can have up to 10 destinations.', 'error');
+          select.value = select.dataset.prev;
+          return;
+        }
+        var card = addDestination({}, true);
+        select.value = card.dataset.id;
+        select.dataset.prev = select.value;
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
     }
 
     function refreshSelects() {
@@ -259,8 +284,22 @@
         var entry = commands[slot[0]] || {};
         var input = el('input', { type: 'text', autocomplete: 'off', autocapitalize: 'none', spellcheck: false, placeholder: 'e.g. lights_off', value: entry.command || '' });
         var select = el('select', {});
-        var row = el('div', { className: 'command' }, [el('span', { textContent: slot[1] }), input, select]);
-        row.slot = slot[0]; row.input = input; row.destination = select;
+        var headers = el('div', {});
+        (entry.headers || []).forEach(function (header) { addHeaderRow(headers, header.name, header.hasValue); });
+        var addHeader = el('button', { type: 'button', className: 'secondary', textContent: '+ Add header' });
+        addHeader.style.width = '100%';
+        addHeader.onclick = function () { addHeaderRow(headers, '', false); };
+        var more = el('details', {}, [
+          el('summary', { textContent: 'Extra headers (optional)' }), headers, addHeader,
+          el('p', { className: 'hint', textContent: 'Sent along with the webhook\'s own headers. Same name replaces the webhook\'s value.' })
+        ]);
+        more.open = (entry.headers || []).length > 0;
+        var row = el('div', { className: 'command' }, [
+          el('h3', { textContent: slot[1] }),
+          el('label', { textContent: 'Command' }), input,
+          el('label', { textContent: 'Webhook' }), select, more
+        ]);
+        row.slot = slot[0]; row.input = input; row.destination = select; row.headers = headers;
         (slot[0].indexOf('up_') === 0 ? commandsUp : commandsDown).appendChild(row);
         fillSelect(select, entry.destination);
       });
@@ -269,7 +308,7 @@
     function readCommands() {
       var out = {};
       commandRows().forEach(function (row) {
-        out[row.slot] = { command: row.input.value, destination: row.destination.value };
+        out[row.slot] = { command: row.input.value, destination: row.destination.value, headers: readHeaderRows(row.headers) };
       });
       return out;
     }

@@ -91,7 +91,10 @@ function cleanConfig(message, previous) {
     var command = stringValue(raw && raw.command);
     if (!command) continue;
     if (command.length > 100 || /[\u0000-\u001f]/.test(command)) return { error: 'A command is too long or has invalid characters.' };
-    commands[SLOTS[j]] = { command: command, destination: seen[raw.destination] ? raw.destination : fallback };
+    var before = previous && previous.commands && previous.commands[SLOTS[j]];
+    var extra = cleanHeaders(raw.headers, before && before.headers);
+    if (extra.error) return { error: 'Button ' + SLOTS[j].replace('_', ' ') + ': ' + extra.error };
+    commands[SLOTS[j]] = { command: command, destination: seen[raw.destination] ? raw.destination : fallback, headers: extra.headers };
   }
   var rawLabels = message.labels && typeof message.labels === 'object' ? message.labels : {};
   var labels = { up: stringValue(rawLabels.up), down: stringValue(rawLabels.down) };
@@ -101,11 +104,18 @@ function cleanConfig(message, previous) {
   return { config: { v: 2, destinations: destinations, noteDestination: noteDestination, commands: commands, labels: labels } };
 }
 
-// The request for a message or button command, as { url, options }.
+// The request for a message or button command, as { url, options }. extraHeaders is optional.
 // JSON by default: { "<field>": text, ... } for notes, { "command": name, ... } for commands.
-function buildRequest(destination, kind, value, now) {
+function buildRequest(destination, kind, value, now, extraHeaders) {
   var headers = {};
   destination.headers.forEach(function (header) { headers[header.name] = header.value; });
+  // A command's own headers are added to the destination's, replacing any with the same name.
+  (extraHeaders || []).forEach(function (header) {
+    Object.keys(headers).forEach(function (name) {
+      if (name.toLowerCase() === header.name.toLowerCase()) delete headers[name];
+    });
+    headers[header.name] = header.value;
+  });
   var hasType = Object.keys(headers).some(function (name) { return name.toLowerCase() === 'content-type'; });
   var body;
   if (destination.format === 'text') {
@@ -153,8 +163,8 @@ async function permissionState(host) {
 }
 
 // Sends a note or command and says what happened: { ok, status, message }. Never throws.
-async function deliver(destination, kind, value, doneText) {
-  var request = buildRequest(destination, kind, value, new Date());
+async function deliver(destination, kind, value, doneText, extraHeaders) {
+  var request = buildRequest(destination, kind, value, new Date(), extraHeaders);
   try {
     var response = await fetch(request.url, request.options);
     if (response.status >= 200 && response.status < 300) {
@@ -199,6 +209,19 @@ async function insertPin(config) {
   }
 }
 
+function summarizeCommands(commands) {
+  var out = {};
+  Object.keys(commands).forEach(function (slot) {
+    var entry = commands[slot];
+    out[slot] = {
+      command: entry.command,
+      destination: entry.destination,
+      headers: (entry.headers || []).map(function (header) { return { name: header.name, hasValue: !!header.value }; }),
+    };
+  });
+  return out;
+}
+
 function summary(config) {
   return {
     configured: !!config,
@@ -211,7 +234,7 @@ function summary(config) {
       };
     }) : [],
     noteDestination: config ? config.noteDestination : '',
-    commands: config ? config.commands : {},
+    commands: config ? summarizeCommands(config.commands) : {},
     labels: config && config.labels ? config.labels : { up: '', down: '' },
   };
 }
@@ -257,7 +280,7 @@ Pebble.registerActionHandler(async function (req, respond) {
       respond.error('INVALID_ARGS', 'No command set for that button.');
       return;
     }
-    var sent = await deliver(findDestination(current, entry.destination), 'command', entry.command, 'Sent ' + entry.command);
+    var sent = await deliver(findDestination(current, entry.destination), 'command', entry.command, 'Sent ' + entry.command, entry.headers);
     if (sent.ok) respond.ok({ text: sent.message });
     else fail(respond, sent);
     return;
