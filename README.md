@@ -14,7 +14,7 @@ Generic by design: it knows nothing about any particular server or note system.
 - 2xx means success. 401/403 reports an auth problem. A blocked host reports a permission problem.
 
 ## Status
-Early. Unit tests pass (`npm test`). Not yet built or run on a phone.
+Early. Unit tests pass (`npm test`). Builds to `build/pebble-webhook.pbw` with pebble-tool 5.2.0 / SDK 4.44. Not yet run on a phone.
 
 Open questions to settle by testing:
 1. Does plugin `fetch` reach a host typed in settings when the manifest declares no `Internet` domain?
@@ -26,7 +26,9 @@ Open questions to settle by testing:
 ## Develop
 ```
 npm test
-~/.venvs/pebble/bin/pebble build     # SDK 4.44+, pebble-tool 5.1.0+
+export PATH=~/.venvs/pebble/bin:$PATH   # pebble-tool needs uv on PATH (pip install uv in the same venv)
+pebble build                             # SDK 4.44+, pebble-tool 5.1.0+
+pebble install --adb                     # Android over adb, or: pebble install --phone <ip>
 ```
 Docs: https://developer.repebble.com/guides/plugins/preview/ and https://developer.repebble.com/guides/ai-agents/
 Reference plugin: https://github.com/coredevices/pebble-apps/tree/main/workflowy
