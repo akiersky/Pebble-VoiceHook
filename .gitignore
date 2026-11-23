@@ -1,5 +1,10 @@
-node_modules/
-build/
+node_modules
+build
 .lock-waf*
 .DS_Store
 .env
+app/build
+app/.lock-waf*
+app/package.json
+app/src/plugin
+app/src/config.html

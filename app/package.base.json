@@ -1,0 +1,22 @@
+{
+  "name": "webhook-app",
+  "author": "kiersky",
+  "version": "0.1.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Webhook",
+    "uuid": "c0756590-bd59-464d-82f3-acd4499077d4",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": ["basalt", "chalk", "diorite", "emery", "flint", "gabbro"],
+    "watchapp": { "watchface": false },
+    "messageKeys": ["TEXT", "SLOT", "RESULT", "MESSAGE"],
+    "resources": { "media": [] },
+    "usesPermissions": [
+      { "name": "Timeline", "reason": "To put a \"Send note\" pin on your watch's timeline", "required": false },
+      { "name": "InvokeAction", "reason": "To send your notes and button commands through the Webhook plugin", "required": true }
+    ]
+  }
+}

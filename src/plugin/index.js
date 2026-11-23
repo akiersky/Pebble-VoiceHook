@@ -1,9 +1,12 @@
-// Webhook: POSTs the user's text to a URL they choose, with headers they choose.
-// The whole configuration (URL, header values) lives in secureStorage, because webhook URLs and
-// headers often carry tokens. The settings page only ever sees the host and header names back.
+// Webhook: POSTs the user's text or button commands to URLs they choose, with headers they choose.
+// The whole configuration (destinations, header values) lives in secureStorage, because webhook URLs
+// and headers often carry tokens. The settings page only ever sees hosts and header names back.
 
-var CONFIG_KEY = 'webhook.config.v1';
+var CONFIG_KEY = 'webhook.config.v2';
+var LEGACY_KEY = 'webhook.config.v1';
 var MAX_HEADERS = 10;
+var MAX_DESTINATIONS = 5;
+var SLOTS = ['up_single', 'up_double', 'up_hold', 'down_single', 'down_double', 'down_hold'];
 var MAX_TEXT = 8000;
 var FORBIDDEN_HEADERS = ['host', 'content-length', 'connection', 'transfer-encoding', 'cookie'];
 
@@ -47,42 +50,89 @@ function cleanHeaders(raw, previous) {
   return { headers: out };
 }
 
-function cleanConfig(message, previous) {
-  var parsed = parseUrl(message.url);
-  if (parsed.error) return { error: parsed.error };
-  var headers = cleanHeaders(message.headers, previous && previous.headers);
-  if (headers.error) return { error: headers.error };
-  var format = message.format === 'text' ? 'text' : 'json';
-  var field = stringValue(message.field) || 'text';
-  if (!/^[A-Za-z0-9_.-]{1,40}$/.test(field)) return { error: 'The JSON field name can only use letters, digits, _ . and -.' };
-  return { config: { url: parsed.url, host: parsed.host, https: parsed.https, headers: headers.headers, format: format, field: field } };
+function cleanDestination(raw, previous) {
+  var id = stringValue(raw && raw.id);
+  if (!/^[A-Za-z0-9_-]{1,20}$/.test(id)) return { error: 'A destination has an invalid id.' };
+  var name = stringValue(raw.name).slice(0, 40) || 'Webhook';
+  var parsed = parseUrl(raw.url);
+  if (parsed.error) return { error: name + ': ' + parsed.error };
+  var headers = cleanHeaders(raw.headers, previous && previous.headers);
+  if (headers.error) return { error: name + ': ' + headers.error };
+  var format = raw.format === 'text' ? 'text' : 'json';
+  var field = stringValue(raw.field) || 'text';
+  if (!/^[A-Za-z0-9_.-]{1,40}$/.test(field)) return { error: name + ': the JSON field name can only use letters, digits, _ . and -.' };
+  return { destination: { id: id, name: name, url: parsed.url, host: parsed.host, https: parsed.https, headers: headers.headers, format: format, field: field } };
 }
 
-// The request for a message, as { url, options }. JSON by default: { "<field>": text, "timestamp", "source" }.
-function buildRequest(config, text, now) {
+function findDestination(config, id) {
+  return config.destinations.filter(function (destination) { return destination.id === id; })[0] || null;
+}
+
+// The whole settings object from the page: { destinations, noteDestination, commands }.
+function cleanConfig(message, previous) {
+  var list = Array.isArray(message.destinations) ? message.destinations : [];
+  if (list.length > MAX_DESTINATIONS) return { error: 'At most ' + MAX_DESTINATIONS + ' destinations.' };
+  var destinations = [];
+  var seen = {};
+  for (var i = 0; i < list.length; i++) {
+    var before = previous && findDestination(previous, stringValue(list[i] && list[i].id));
+    var cleaned = cleanDestination(list[i], before);
+    if (cleaned.error) return { error: cleaned.error };
+    if (seen[cleaned.destination.id]) return { error: 'A destination appears twice.' };
+    seen[cleaned.destination.id] = true;
+    destinations.push(cleaned.destination);
+  }
+  var fallback = destinations.length ? destinations[0].id : '';
+  var noteDestination = seen[message.noteDestination] ? message.noteDestination : fallback;
+  var commands = {};
+  var rawCommands = message.commands && typeof message.commands === 'object' ? message.commands : {};
+  for (var j = 0; j < SLOTS.length; j++) {
+    var raw = rawCommands[SLOTS[j]];
+    var command = stringValue(raw && raw.command);
+    if (!command) continue;
+    if (command.length > 100 || /[\u0000-\u001f]/.test(command)) return { error: 'A command is too long or has invalid characters.' };
+    commands[SLOTS[j]] = { command: command, destination: seen[raw.destination] ? raw.destination : fallback };
+  }
+  return { config: { v: 2, destinations: destinations, noteDestination: noteDestination, commands: commands } };
+}
+
+// The request for a message or button command, as { url, options }.
+// JSON by default: { "<field>": text, ... } for notes, { "command": name, ... } for commands.
+function buildRequest(destination, kind, value, now) {
   var headers = {};
-  config.headers.forEach(function (header) { headers[header.name] = header.value; });
+  destination.headers.forEach(function (header) { headers[header.name] = header.value; });
   var hasType = Object.keys(headers).some(function (name) { return name.toLowerCase() === 'content-type'; });
   var body;
-  if (config.format === 'text') {
-    body = text;
+  if (destination.format === 'text') {
+    body = value;
     if (!hasType) headers['Content-Type'] = 'text/plain; charset=utf-8';
   } else {
     var payload = {};
-    payload[config.field] = text;
+    payload[kind === 'command' ? 'command' : destination.field] = value;
     payload.timestamp = now.toISOString();
     payload.source = 'pebble';
     body = JSON.stringify(payload);
     if (!hasType) headers['Content-Type'] = 'application/json';
   }
-  return { url: config.url, options: { method: 'POST', headers: headers, body: body } };
+  return { url: destination.url, options: { method: 'POST', headers: headers, body: body } };
+}
+
+// Settings saved by version 0.1 had a single destination at the top level.
+function migrate(stored) {
+  if (stored && stored.v === 2 && Array.isArray(stored.destinations)) return stored;
+  if (stored && stored.url) {
+    var destination = { id: 'main', name: 'Webhook', url: stored.url, host: stored.host, https: stored.https, headers: stored.headers || [], format: stored.format || 'json', field: stored.field || 'text' };
+    return { v: 2, destinations: [destination], noteDestination: 'main', commands: {} };
+  }
+  return null;
 }
 
 async function loadConfig() {
   try {
     var stored = await Pebble.secureStorage.getItem(CONFIG_KEY);
-    var config = stored ? JSON.parse(stored) : null;
-    return config && config.url ? config : null;
+    if (!stored) stored = await Pebble.secureStorage.getItem(LEGACY_KEY);
+    var config = stored ? migrate(JSON.parse(stored)) : null;
+    return config && config.destinations.length ? config : null;
   } catch (e) {
     return null;
   }
@@ -97,25 +147,25 @@ async function permissionState(host) {
   return 'unknown';
 }
 
-// Sends text and says what happened: { ok, status, message }. Never throws.
-async function deliver(config, text) {
-  var request = buildRequest(config, text, new Date());
+// Sends a note or command and says what happened: { ok, status, message }. Never throws.
+async function deliver(destination, kind, value, doneText) {
+  var request = buildRequest(destination, kind, value, new Date());
   try {
     var response = await fetch(request.url, request.options);
     if (response.status >= 200 && response.status < 300) {
-      return { ok: true, status: response.status, message: 'Sent to ' + config.host + '.' };
+      return { ok: true, status: response.status, message: doneText || 'Sent to ' + destination.host + '.' };
     }
     if (response.status === 401 || response.status === 403) {
-      return { ok: false, status: response.status, message: config.host + ' rejected the request (' + response.status + '). Check your headers in the Webhook settings.' };
+      return { ok: false, status: response.status, message: destination.host + ' rejected the request (' + response.status + '). Check your headers in the Webhook settings.' };
     }
-    return { ok: false, status: response.status, message: config.host + ' answered ' + response.status + '.' };
+    return { ok: false, status: response.status, message: destination.host + ' answered ' + response.status + '.' };
   } catch (error) {
     var name = error && error.name;
     console.error('Webhook request failed: ' + name);
     if (name === 'NotAllowedError') {
-      return { ok: false, status: 0, blocked: true, message: 'Webhook isn\'t allowed to connect to ' + config.host + '. Allow it in the plugin\'s Permissions.' };
+      return { ok: false, status: 0, blocked: true, message: 'Webhook isn\'t allowed to connect to ' + destination.host + '. Allow it in the plugin\'s Permissions.' };
     }
-    return { ok: false, status: 0, message: 'Could not reach ' + config.host + '. The message may not have been delivered.' };
+    return { ok: false, status: 0, message: 'Could not reach ' + destination.host + '. The message may not have been delivered.' };
   }
 }
 
@@ -130,7 +180,7 @@ async function insertPin(config) {
     layout: {
       type: 'genericPin',
       title: 'Send note',
-      subtitle: config ? 'to ' + config.host : 'Webhook',
+      subtitle: config ? 'to ' + findDestination(config, config.noteDestination).host : 'Webhook',
       tinyIcon: 'system://images/NOTIFICATION_FLAG',
     },
     actions: [{ title: 'Send note', type: 'pluginAction', action: 'send_message', inputArg: 'text' }],
@@ -147,39 +197,67 @@ async function insertPin(config) {
 function summary(config) {
   return {
     configured: !!config,
-    url: config ? config.url : '',
-    host: config ? config.host : '',
-    format: config ? config.format : 'json',
-    field: config ? config.field : 'text',
     // Header values never leave secure storage.
-    headers: config ? config.headers.map(function (header) { return { name: header.name, hasValue: !!header.value }; }) : [],
+    destinations: config ? config.destinations.map(function (destination) {
+      return {
+        id: destination.id, name: destination.name, url: destination.url, host: destination.host,
+        format: destination.format, field: destination.field,
+        headers: destination.headers.map(function (header) { return { name: header.name, hasValue: !!header.value }; }),
+      };
+    }) : [],
+    noteDestination: config ? config.noteDestination : '',
+    commands: config ? config.commands : {},
   };
 }
 
+function fail(respond, result) {
+  respond.error(result.status === 401 || result.status === 403 ? 'AUTH_REQUIRED' : 'UNKNOWN', result.message);
+}
+
 Pebble.registerActionHandler(async function (req, respond) {
-  if (req.action !== 'send_message') {
-    console.error('Unsupported action: ' + req.action);
-    respond.error('PLUGIN_UNAVAILABLE', 'Unsupported Webhook action.');
-    return;
-  }
   var args = req.args || {};
-  var text = typeof args.text === 'string' ? args.text.trim() : '';
-  if (!text) {
-    respond.error('INVALID_ARGS', 'text must not be empty.');
+  if (req.action === 'send_message') {
+    var text = typeof args.text === 'string' ? args.text.trim() : '';
+    if (!text) {
+      respond.error('INVALID_ARGS', 'text must not be empty.');
+      return;
+    }
+    if (text.length > MAX_TEXT) {
+      respond.error('INVALID_ARGS', 'That message is too long to send (limit ' + MAX_TEXT + ' characters).');
+      return;
+    }
+    var config = await loadConfig();
+    if (!config) {
+      respond.error('AUTH_REQUIRED', 'Set your webhook URL in the Webhook plugin\'s settings first.');
+      return;
+    }
+    var result = await deliver(findDestination(config, config.noteDestination), 'text', text);
+    if (result.ok) respond.ok({ text: result.message });
+    else fail(respond, result);
     return;
   }
-  if (text.length > MAX_TEXT) {
-    respond.error('INVALID_ARGS', 'That message is too long to send (limit ' + MAX_TEXT + ' characters).');
+  if (req.action === 'send_command') {
+    if (SLOTS.indexOf(args.slot) === -1) {
+      respond.error('INVALID_ARGS', 'Unknown button.');
+      return;
+    }
+    var current = await loadConfig();
+    if (!current) {
+      respond.error('AUTH_REQUIRED', 'Set your webhook URL in the Webhook plugin\'s settings first.');
+      return;
+    }
+    var entry = current.commands[args.slot];
+    if (!entry) {
+      respond.error('INVALID_ARGS', 'No command set for that button.');
+      return;
+    }
+    var sent = await deliver(findDestination(current, entry.destination), 'command', entry.command, 'Sent ' + entry.command);
+    if (sent.ok) respond.ok({ text: sent.message });
+    else fail(respond, sent);
     return;
   }
-  var config = await loadConfig();
-  if (!config) {
-    respond.error('AUTH_REQUIRED', 'Set your webhook URL in the Webhook plugin\'s settings first.');
-    return;
-  }
-  var result = await deliver(config, text);
-  if (result.ok) respond.ok({ text: result.message });
-  else respond.error(result.status === 401 || result.status === 403 ? 'AUTH_REQUIRED' : 'UNKNOWN', result.message);
+  console.error('Unsupported action: ' + req.action);
+  respond.error('PLUGIN_UNAVAILABLE', 'Unsupported Webhook action.');
 });
 
 Pebble.registerConfigHandler(async function (message, respond) {
@@ -197,8 +275,7 @@ Pebble.registerConfigHandler(async function (message, respond) {
       }
       await Pebble.secureStorage.setItem(CONFIG_KEY, JSON.stringify(cleaned.config));
       var state = summary(cleaned.config);
-      state.permission = await permissionState(cleaned.config.host);
-      state.insecure = !cleaned.config.https;
+      state.insecure = cleaned.config.destinations.filter(function (destination) { return !destination.https; }).map(function (destination) { return destination.name; });
       respond(state);
       return;
     }
@@ -206,14 +283,15 @@ Pebble.registerConfigHandler(async function (message, respond) {
     // Sends a real request with the saved settings. Doubles as the first "link": the phone asks the user
     // to allow the host the first time it's used.
     case 'test': {
-      var config = await loadConfig();
-      if (!config) {
+      var saved = await loadConfig();
+      var target = saved && findDestination(saved, message.destination);
+      if (!target) {
         respond({ error: 'Save your settings first.' });
         return;
       }
-      var result = await deliver(config, 'Test message from the Pebble Webhook plugin');
-      result.permission = await permissionState(config.host);
-      respond(result);
+      var tested = await deliver(target, 'text', 'Test message from the Pebble Webhook plugin');
+      tested.permission = await permissionState(target.host);
+      respond(tested);
       return;
     }
 
@@ -235,5 +313,5 @@ Pebble.registerConfigHandler(async function (message, respond) {
 });
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseUrl: parseUrl, cleanHeaders: cleanHeaders, cleanConfig: cleanConfig, buildRequest: buildRequest };
+  module.exports = { parseUrl: parseUrl, cleanHeaders: cleanHeaders, cleanConfig: cleanConfig, buildRequest: buildRequest, migrate: migrate };
 }

@@ -17,7 +17,7 @@
       }
     ],
     "plugin": {
-      "description": "Sends your notes to a URL you choose, as a POST request with the headers you set. Use it to feed notes, todos and ideas from your Pebble into your own server, automation or note system.",
+      "description": "Sends your notes and button commands to URLs you choose, as POST requests with the headers you set. Use it to feed notes, todos, ideas and triggers from your Pebble into your own server, automation or note system.",
       "script": "src/plugin/index.js",
       "actions": [
         {
@@ -32,7 +32,37 @@
                 "description": "The complete message to send, preferably the user's exact words."
               }
             },
-            "required": ["text"],
+            "required": [
+              "text"
+            ],
+            "additionalProperties": false
+          },
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "send_command",
+          "description": "Send one of the user's preconfigured button commands to its configured webhook URL as an HTTP POST. Use only when the user explicitly asks to trigger that button command.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "type": "string",
+                "enum": [
+                  "up_single",
+                  "up_double",
+                  "up_hold",
+                  "down_single",
+                  "down_double",
+                  "down_hold"
+                ],
+                "description": "Which configured button command to send."
+              }
+            },
+            "required": [
+              "slot"
+            ],
             "additionalProperties": false
           },
           "destructive": false,

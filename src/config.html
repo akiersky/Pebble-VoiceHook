@@ -57,6 +57,15 @@
     .actions.two { grid-template-columns: 1fr 1fr; }
     #addHeader { width: 100%; margin-top: 2px; }
     footer { text-align: center; margin-top: 8px; }
+    details { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; background: var(--bg); }
+    summary { padding: 12px 14px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+    summary small { color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dest-body { padding: 0 14px 14px; }
+    .dest-body input, .dest-body select { background: var(--card); }
+    .command { display: grid; grid-template-columns: 5.5em 1fr; gap: 8px; align-items: center; margin-top: 10px; }
+    .command span { font-size: 14px; color: var(--muted); }
+    .command select { grid-column: 2; }
+    .command input, .command select { padding: 10px 12px; }
   </style>
 </head>
 <body>
@@ -73,38 +82,32 @@
     <div id="status" role="status" aria-live="polite"></div>
 
     <section>
-      <h2>Destination</h2>
-      <label for="url">URL</label>
-      <input id="url" type="url" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://example.com/capture">
-      <p class="hint">Each note is sent as a POST. Use https. The first test asks you to allow this host.</p>
-
-      <label>Headers</label>
-      <div id="headers"></div>
-      <button id="addHeader" class="secondary" type="button">+ Add header</button>
-      <p class="hint">Values stay on this phone and are never shown again. Example: <code>Authorization</code> and <code>Bearer your-token</code>. Leave a saved value blank to keep it.</p>
+      <h2>Destinations</h2>
+      <p class="hint" style="margin: 0 0 12px;">Where messages can go. Add one for each service. Each new host asks for your permission the first time it's used.</p>
+      <div id="destinations"></div>
+      <button id="addDestination" class="secondary" type="button" style="width: 100%;">+ Add destination</button>
     </section>
 
     <section>
-      <h2>Message</h2>
-      <label for="format">Format</label>
-      <select id="format">
-        <option value="json">JSON with text, timestamp and source</option>
-        <option value="text">Plain text, just the message</option>
-      </select>
-      <div id="fieldWrap">
-        <label for="field">JSON field for the message</label>
-        <input id="field" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" value="text">
-      </div>
+      <h2>Voice notes</h2>
+      <label for="noteDestination">Send dictated notes to</label>
+      <select id="noteDestination"></select>
+      <p class="hint">On the watchapp, press Select and speak.</p>
     </section>
 
-    <div class="actions two" style="margin: 0 0 12px;">
+    <section>
+      <h2>Button commands</h2>
+      <p class="hint" style="margin: 0 0 4px;">Send a fixed command with Up or Down on the watchapp. Leave a command empty to turn that button off.</p>
+      <div id="commands"></div>
+    </section>
+
+    <div class="actions" style="margin: 0 0 12px;">
       <button id="save" type="button">Save</button>
-      <button id="test" class="secondary" type="button">Send test message</button>
     </div>
 
     <section>
-      <h2>On your watch</h2>
-      <p class="hint" style="margin: 0 0 12px;">Adds a "Send note" pin to your timeline. Open it, say your note, and it goes to your webhook.</p>
+      <h2>Timeline pin</h2>
+      <p class="hint" style="margin: 0 0 12px;">Adds a "Send note" pin to your watch's timeline. Open it, say your note, and it goes to your voice-note destination.</p>
       <button id="pin" class="secondary" type="button" style="width: 100%;">Add "Send note" pin to my watch</button>
     </section>
 
@@ -114,16 +117,17 @@
   </main>
 
   <script>
-    var urlInput = document.getElementById('url');
-    var headersBox = document.getElementById('headers');
-    var formatSelect = document.getElementById('format');
-    var fieldInput = document.getElementById('field');
-    var fieldWrap = document.getElementById('fieldWrap');
+    var SLOTS = [
+      ['up_single', 'Up'], ['up_double', 'Up ×2'], ['up_hold', 'Up hold'],
+      ['down_single', 'Down'], ['down_double', 'Down ×2'], ['down_hold', 'Down hold']
+    ];
+    var destinationsBox = document.getElementById('destinations');
+    var noteSelect = document.getElementById('noteDestination');
+    var commandsBox = document.getElementById('commands');
     var saveButton = document.getElementById('save');
-    var testButton = document.getElementById('test');
     var unlinkButton = document.getElementById('unlink');
     var pinButton = document.getElementById('pin');
-    var addButton = document.getElementById('addHeader');
+    var addDestinationButton = document.getElementById('addDestination');
     var statusElement = document.getElementById('status');
     var summaryElement = document.getElementById('summary');
     var warning = document.getElementById('warning');
@@ -136,47 +140,140 @@
     }
 
     function setBusy(busy) {
-      [saveButton, testButton, unlinkButton, pinButton].forEach(function (button) { button.disabled = busy; });
+      Array.prototype.forEach.call(document.querySelectorAll('button'), function (button) { button.disabled = busy; });
     }
 
-    function addHeaderRow(name, hasValue) {
-      var row = document.createElement('div');
-      row.className = 'header-row';
-      var nameInput = document.createElement('input');
-      nameInput.type = 'text'; nameInput.placeholder = 'Name';
-      nameInput.autocapitalize = 'none'; nameInput.spellcheck = false; nameInput.value = name || '';
-      var valueInput = document.createElement('input');
-      valueInput.type = 'password'; valueInput.autocomplete = 'off'; valueInput.spellcheck = false;
-      valueInput.placeholder = hasValue ? 'Saved' : 'Value';
-      var remove = document.createElement('button');
-      remove.type = 'button'; remove.className = 'secondary remove'; remove.textContent = '×';
+    function el(tag, props, children) {
+      var node = document.createElement(tag);
+      Object.keys(props || {}).forEach(function (key) { node[key] = props[key]; });
+      (children || []).forEach(function (child) { node.append(child); });
+      return node;
+    }
+
+    function labelled(text, input) { return [el('label', { textContent: text }), input]; }
+
+    // ----- destinations -----
+    function addHeaderRow(box, name, hasValue) {
+      var row = el('div', { className: 'header-row' });
+      var nameInput = el('input', { type: 'text', placeholder: 'Name', autocapitalize: 'none', spellcheck: false, value: name || '' });
+      var valueInput = el('input', { type: 'password', autocomplete: 'off', spellcheck: false, placeholder: hasValue ? 'Saved' : 'Value' });
+      var remove = el('button', { type: 'button', className: 'secondary remove', textContent: '×' });
       remove.setAttribute('aria-label', 'Remove header');
       remove.onclick = function () { row.remove(); };
       row.append(nameInput, valueInput, remove);
-      headersBox.appendChild(row);
+      box.appendChild(row);
     }
 
-    function readHeaders() {
-      return Array.prototype.map.call(headersBox.children, function (row) {
-        return { name: row.children[0].value, value: row.children[1].value };
+    function addDestination(data, open) {
+      data = data || {};
+      var card = el('details', {});
+      card.dataset.id = data.id || 'd' + Date.now().toString(36);
+      card.open = !!open;
+      var title = el('span', {});
+      var sub = el('small', {});
+      var summary = el('summary', {}, [title, sub]);
+      var nameInput = el('input', { type: 'text', value: data.name || '', placeholder: 'Notes server' });
+      var urlInput = el('input', { type: 'url', inputMode: 'url', autocomplete: 'off', autocapitalize: 'none', spellcheck: false, value: data.url || '', placeholder: 'https://example.com/capture' });
+      var headers = el('div', {});
+      (data.headers || []).forEach(function (header) { addHeaderRow(headers, header.name, header.hasValue); });
+      if (!(data.headers || []).length) addHeaderRow(headers, '', false);
+      var addHeader = el('button', { type: 'button', className: 'secondary', textContent: '+ Add header' });
+      addHeader.style.width = '100%';
+      addHeader.onclick = function () { addHeaderRow(headers, '', false); };
+      var format = el('select', {}, [
+        el('option', { value: 'json', textContent: 'JSON with text, timestamp and source' }),
+        el('option', { value: 'text', textContent: 'Plain text, just the message' })
+      ]);
+      format.value = data.format || 'json';
+      var field = el('input', { type: 'text', autocomplete: 'off', autocapitalize: 'none', spellcheck: false, value: data.field || 'text' });
+      var fieldWrap = el('div', {}, labelled('JSON field for notes', field));
+      format.onchange = function () { fieldWrap.hidden = format.value !== 'json'; };
+      fieldWrap.hidden = format.value !== 'json';
+      var test = el('button', { type: 'button', className: 'secondary', textContent: 'Save & send test message' });
+      var remove = el('button', { type: 'button', className: 'danger', textContent: 'Remove' });
+      var actions = el('div', { className: 'actions two' }, [test, remove]);
+      var body = el('div', { className: 'dest-body' }, [].concat(
+        labelled('Name', nameInput), labelled('URL', urlInput),
+        [el('p', { className: 'hint', textContent: 'Each message is sent as a POST. Use https.' })],
+        labelled('Headers', headers), [addHeader,
+        el('p', { className: 'hint', textContent: 'Values stay on this phone and are never shown again. Example: Authorization and Bearer your-token. Leave a saved value blank to keep it.' })],
+        labelled('Format', format), [fieldWrap, actions]));
+      card.append(summary, body);
+
+      function refreshTitle() {
+        title.textContent = nameInput.value.trim() || 'New destination';
+        var match = /^https?:\/\/([^\/?#]+)/i.exec(urlInput.value.trim());
+        sub.textContent = match ? match[1] : 'no URL yet';
+        refreshSelects();
+      }
+      nameInput.oninput = refreshTitle; urlInput.oninput = refreshTitle;
+      remove.onclick = function () { card.remove(); refreshSelects(); };
+      test.onclick = function () { saveAll(card.dataset.id); };
+      card.read = function () {
+        return {
+          id: card.dataset.id, name: nameInput.value, url: urlInput.value, format: format.value, field: field.value,
+          headers: Array.prototype.map.call(headers.children, function (row) { return { name: row.children[0].value, value: row.children[1].value }; })
+        };
+      };
+      card.label = function () { return nameInput.value.trim() || 'New destination'; };
+      destinationsBox.appendChild(card);
+      refreshTitle();
+    }
+
+    function readDestinations() {
+      return Array.prototype.map.call(destinationsBox.children, function (card) { return card.read(); });
+    }
+
+    // ----- selects that pick a destination -----
+    function fillSelect(select, keep) {
+      var chosen = keep !== undefined ? keep : select.value;
+      select.replaceChildren();
+      Array.prototype.forEach.call(destinationsBox.children, function (card) {
+        select.appendChild(el('option', { value: card.dataset.id, textContent: card.label() }));
+      });
+      if (chosen) select.value = chosen;
+      if (!select.value && select.options.length) select.value = select.options[0].value;
+    }
+
+    function refreshSelects() {
+      fillSelect(noteSelect);
+      Array.prototype.forEach.call(commandsBox.children, function (row) { fillSelect(row.destination); });
+    }
+
+    // ----- commands -----
+    function buildCommands(commands) {
+      commandsBox.replaceChildren();
+      SLOTS.forEach(function (slot) {
+        var entry = commands[slot[0]] || {};
+        var input = el('input', { type: 'text', autocomplete: 'off', autocapitalize: 'none', spellcheck: false, placeholder: 'e.g. lights_off', value: entry.command || '' });
+        var select = el('select', {});
+        var row = el('div', { className: 'command' }, [el('span', { textContent: slot[1] }), input, select]);
+        row.slot = slot[0]; row.input = input; row.destination = select;
+        commandsBox.appendChild(row);
+        fillSelect(select, entry.destination);
       });
     }
 
-    function syncFormat() { fieldWrap.hidden = formatSelect.value !== 'json'; }
-    formatSelect.onchange = syncFormat;
-    addButton.onclick = function () { addHeaderRow('', false); };
+    function readCommands() {
+      var out = {};
+      Array.prototype.forEach.call(commandsBox.children, function (row) {
+        out[row.slot] = { command: row.input.value, destination: row.destination.value };
+      });
+      return out;
+    }
 
+    // ----- state -----
     function showState(state) {
-      urlInput.value = state.url || '';
-      formatSelect.value = state.format || 'json';
-      fieldInput.value = state.field || 'text';
-      syncFormat();
-      headersBox.replaceChildren();
-      (state.headers || []).forEach(function (header) { addHeaderRow(header.name, header.hasValue); });
-      if (!state.headers || !state.headers.length) addHeaderRow('', false);
-      warning.hidden = !state.insecure;
-      if (state.insecure) warning.textContent = 'This URL uses http, so messages and headers are sent without encryption. Prefer https.';
-      summaryElement.textContent = state.configured ? 'Sending to ' + state.host : 'Send notes from your watch to any URL.';
+      destinationsBox.replaceChildren();
+      var list = state.destinations || [];
+      list.forEach(function (destination) { addDestination(destination, false); });
+      if (!list.length) addDestination({}, true);
+      fillSelect(noteSelect, state.noteDestination);
+      buildCommands(state.commands || {});
+      var insecure = state.insecure || [];
+      warning.hidden = !insecure.length;
+      if (insecure.length) warning.textContent = insecure.join(', ') + ' uses http, so messages and headers are sent without encryption. Prefer https.';
+      summaryElement.textContent = list.length ? 'Sending to ' + list.map(function (d) { return d.host; }).join(', ') : 'Send notes from your watch to any URL.';
     }
 
     function permissionNote(permission, host) {
@@ -184,30 +281,33 @@
       return '';
     }
 
-    saveButton.onclick = async function () {
+    function labelFor(id) {
+      var card = Array.prototype.filter.call(destinationsBox.children, function (c) { return c.dataset.id === id; })[0];
+      return card ? card.label() : 'the destination';
+    }
+
+    // Saves everything. With a destination id, also sends that destination a test message.
+    async function saveAll(testId) {
       setBusy(true);
       setStatus('Saving…');
       try {
-        var result = await send({ type: 'save', url: urlInput.value, headers: readHeaders(), format: formatSelect.value, field: fieldInput.value });
+        var result = await send({ type: 'save', destinations: readDestinations(), noteDestination: noteSelect.value, commands: readCommands() });
         if (result.error) { setStatus(result.error, 'error'); return; }
+        var openIds = Array.prototype.filter.call(destinationsBox.children, function (c) { return c.open; }).map(function (c) { return c.dataset.id; });
         showState(result);
-        setStatus('Saved. Tap "Send test message" to check it and allow the connection.' + permissionNote(result.permission, result.host), 'ok');
+        Array.prototype.forEach.call(destinationsBox.children, function (c) { c.open = openIds.indexOf(c.dataset.id) !== -1; });
+        if (!testId) { setStatus('Saved.', 'ok'); return; }
+        setStatus('Sending a test message…');
+        var test = await send({ type: 'test', destination: testId });
+        if (test.error) { setStatus(test.error, 'error'); return; }
+        setStatus(labelFor(testId) + ': ' + test.message + (test.ok ? ' It is set up.' : permissionNote(test.permission, '')), test.ok ? 'ok' : 'error');
       } catch (error) {
         setStatus('Could not contact the Webhook plugin. Try reopening this page.', 'error');
       } finally { setBusy(false); }
-    };
+    }
 
-    testButton.onclick = async function () {
-      setBusy(true);
-      setStatus('Sending a test message…');
-      try {
-        var result = await send({ type: 'test' });
-        if (result.error) { setStatus(result.error, 'error'); return; }
-        setStatus(result.message + (result.ok ? ' Your webhook is set up.' : permissionNote(result.permission, '')), result.ok ? 'ok' : 'error');
-      } catch (error) {
-        setStatus('Could not contact the Webhook plugin. Try reopening this page.', 'error');
-      } finally { setBusy(false); }
-    };
+    saveButton.onclick = function () { saveAll(); };
+    addDestinationButton.onclick = function () { addDestination({}, true); };
 
     pinButton.onclick = async function () {
       setBusy(true);

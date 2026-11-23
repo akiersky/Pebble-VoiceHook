@@ -3,7 +3,7 @@ const assert = require('node:assert');
 
 // The plugin registers handlers on load, so give it a stub Pebble.
 global.Pebble = { registerActionHandler() {}, registerConfigHandler() {}, secureStorage: {} };
-const { parseUrl, cleanHeaders, cleanConfig, buildRequest } = require('../src/plugin/index.js');
+const { parseUrl, cleanHeaders, cleanConfig, buildRequest, migrate } = require('../src/plugin/index.js');
 
 test('parseUrl accepts https and http, rejects the rest', () => {
   assert.strictEqual(parseUrl('https://Example.com:8443/a?b=c').host, 'example.com');
@@ -24,27 +24,59 @@ test('cleanHeaders validates names and keeps saved values when blank', () => {
   assert.deepStrictEqual(cleanHeaders([{ name: '  ', value: 'x' }]).headers, []);
 });
 
-test('cleanConfig defaults and field validation', () => {
-  const ok = cleanConfig({ url: 'https://example.com/hook', headers: [], format: 'bogus', field: '' });
-  assert.strictEqual(ok.config.format, 'json');
-  assert.strictEqual(ok.config.field, 'text');
-  assert.ok(cleanConfig({ url: 'https://example.com', headers: [], field: 'bad field!' }).error);
+const dest = (extra) => ({ id: 'a', name: 'Notes', url: 'https://example.com/hook', headers: [], ...extra });
+
+test('cleanConfig defaults, destinations and commands', () => {
+  const ok = cleanConfig({
+    destinations: [dest({ format: 'bogus', field: '' }), dest({ id: 'b', name: 'Home', url: 'https://home.example/x' })],
+    noteDestination: 'nope',
+    commands: { up_single: { command: ' lights_off ', destination: 'b' }, up_double: { command: '' }, bogus: { command: 'x' }, down_hold: { command: 'x', destination: 'zzz' } },
+  });
+  const c = ok.config;
+  assert.strictEqual(c.destinations[0].format, 'json');
+  assert.strictEqual(c.destinations[0].field, 'text');
+  assert.strictEqual(c.noteDestination, 'a');
+  assert.deepStrictEqual(c.commands, { up_single: { command: 'lights_off', destination: 'b' }, down_hold: { command: 'x', destination: 'a' } });
+  assert.ok(cleanConfig({ destinations: [dest({ field: 'bad field!' })] }).error);
+  assert.ok(cleanConfig({ destinations: [dest(), dest()] }).error);
+  assert.ok(cleanConfig({ destinations: [dest({ url: 'nope' })] }).error);
+  assert.ok(cleanConfig({ destinations: [dest({ id: 'bad id!' })] }).error);
+  assert.deepStrictEqual(cleanConfig({ destinations: [] }).config.destinations, []);
 });
 
-test('buildRequest builds JSON and text bodies', () => {
+test('cleanConfig keeps a saved header value per destination', () => {
+  const previous = { destinations: [dest({ headers: [{ name: 'X-Token', value: 'secret' }] })] };
+  const next = cleanConfig({ destinations: [dest({ headers: [{ name: 'X-Token', value: '' }] })] }, previous);
+  assert.strictEqual(next.config.destinations[0].headers[0].value, 'secret');
+});
+
+test('buildRequest builds JSON, command and text bodies', () => {
   const now = new Date('2026-11-23T10:00:00Z');
   const base = { url: 'https://example.com/h', headers: [{ name: 'X-Token', value: 't' }], format: 'json', field: 'msg' };
-  const json = buildRequest(base, 'hello', now);
+  const json = buildRequest(base, 'text', 'hello', now);
   assert.strictEqual(json.options.method, 'POST');
   assert.strictEqual(json.options.headers['X-Token'], 't');
   assert.strictEqual(json.options.headers['Content-Type'], 'application/json');
   assert.deepStrictEqual(JSON.parse(json.options.body), { msg: 'hello', timestamp: '2026-11-23T10:00:00.000Z', source: 'pebble' });
 
-  const text = buildRequest({ ...base, format: 'text' }, 'hello', now);
+  const command = buildRequest(base, 'command', 'lights_off', now);
+  assert.deepStrictEqual(JSON.parse(command.options.body), { command: 'lights_off', timestamp: '2026-11-23T10:00:00.000Z', source: 'pebble' });
+
+  const text = buildRequest({ ...base, format: 'text' }, 'text', 'hello', now);
   assert.strictEqual(text.options.body, 'hello');
   assert.strictEqual(text.options.headers['Content-Type'], 'text/plain; charset=utf-8');
 
-  const custom = buildRequest({ ...base, headers: [{ name: 'content-type', value: 'application/x-ndjson' }] }, 'hi', now);
+  const custom = buildRequest({ ...base, headers: [{ name: 'content-type', value: 'application/x-ndjson' }] }, 'text', 'hi', now);
   assert.strictEqual(custom.options.headers['Content-Type'], undefined);
   assert.strictEqual(custom.options.headers['content-type'], 'application/x-ndjson');
+});
+
+test('migrate upgrades version 0.1 settings and passes version 2 through', () => {
+  const old = { url: 'https://example.com/h', host: 'example.com', https: true, headers: [{ name: 'A', value: 'b' }], format: 'text', field: 'text' };
+  const moved = migrate(old);
+  assert.strictEqual(moved.destinations[0].url, old.url);
+  assert.strictEqual(moved.noteDestination, moved.destinations[0].id);
+  const v2 = { v: 2, destinations: [], noteDestination: '', commands: {} };
+  assert.strictEqual(migrate(v2), v2);
+  assert.strictEqual(migrate(null), null);
 });
