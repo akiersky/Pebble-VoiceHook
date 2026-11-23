@@ -129,11 +129,12 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
   GPoint center = GPoint(bounds.size.w / 2, bounds.size.h * 4 / 10);
   switch (s_state) {
     case StateIdle: {
-      // The microphone, with an arrow out to the Select button, and the user's reminders for Up and Down.
-      int mic_x = (bounds.size.w - 80) / 2 - bounds.size.w / 6;
+      // The microphone in the middle, a short arrow at the Select button, and the user's reminders for Up and Down.
+      int mic_x = (bounds.size.w - 80) / 2;
       int mid = bounds.size.h / 2;
       graphics_draw_bitmap_in_rect(ctx, s_mic, GRect(mic_x, mid - 40, 80, 80));
-      prv_draw_arrow(ctx, GPoint(mic_x + 84, mid), GPoint(prv_edge_x(bounds, mid), mid));
+      int select_edge = prv_edge_x(bounds, mid);
+      prv_draw_arrow(ctx, GPoint(select_edge - 20, mid), GPoint(select_edge, mid));
       prv_draw_button_label(ctx, bounds, bounds.size.h * 17 / 100, s_up_label);
       prv_draw_button_label(ctx, bounds, bounds.size.h * 83 / 100, s_down_label);
       break;
