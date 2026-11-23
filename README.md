@@ -14,14 +14,17 @@ Generic by design: it knows nothing about any particular server or note system.
 - 2xx means success. 401/403 reports an auth problem. A blocked host reports a permission problem.
 
 ## Status
-Early. Unit tests pass (`npm test`). Builds to `build/pebble-webhook.pbw` with pebble-tool 5.2.0 / SDK 4.44. Not yet run on a phone.
+Early. Unit tests pass (`npm test`). Builds to `build/pebble-webhook.pbw` with pebble-tool 5.2.0 / SDK 4.44. Installed and tested on an Android phone (Pixel 7).
 
-Open questions to settle by testing:
-1. Does plugin `fetch` reach a host typed in settings when the manifest declares no `Internet` domain?
-   (Docs say each domain is its own permission. This plugin declares none on purpose.)
-2. Are custom request headers honored by plugin `fetch`? (Workflowy's plugin sets `Authorization`, so likely.)
-3. How does a user trigger `send_message` from the watch? The docs show agent (Index) actions and `pluginAction` on pins.
-4. How to install a local `.pbw` for testing, then publishing with `pebble publish`.
+Findings from testing on Android (2026-11-23):
+1. A host typed in settings works with no `Internet` domain declared. The phone asks the user to allow
+   the host the first time it is used (tested against webhook.site). CONFIRMED.
+2. Custom request headers: pending confirmation of the header arriving at the receiver.
+3. Triggering `send_message` from the watch: not yet tested. Options are Pebble's Index agent (voice),
+   a timeline pin or notification with a `pluginAction` (`inputArg: "text"`), or a small watchapp.
+4. Install: `pebble install build/pebble-webhook.pbw --adb` (file first; `--adb` takes an optional device
+   serial and otherwise swallows the path). Needs Android wireless debugging paired with `adb pair`.
+   Publish with `pebble publish` when ready.
 
 ## Develop
 ```
