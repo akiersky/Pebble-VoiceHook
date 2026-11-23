@@ -57,6 +57,9 @@
     <button id="test" class="secondary" type="button">Send test message</button>
     <button id="unlink" class="secondary" type="button">Clear settings</button>
   </div>
+  <label>On your watch</label>
+  <button id="pin" class="secondary" type="button">Add "Send note" pin to my watch</button>
+  <p class="hint">Adds a timeline pin. Open it on the watch, say your note, and it is sent to your webhook.</p>
   <p id="warning" role="alert" hidden></p>
   <div id="status">Starting the Webhook plugin…</div>
 
@@ -75,7 +78,7 @@
 
     function send(message) { return Pebble.sendMessage('plugin', message); }
 
-    function setBusy(busy) { saveButton.disabled = busy; testButton.disabled = busy; unlinkButton.disabled = busy; }
+    function setBusy(busy) { saveButton.disabled = busy; testButton.disabled = busy; unlinkButton.disabled = busy; document.getElementById('pin').disabled = busy; }
 
     function addHeaderRow(name, hasValue) {
       var row = document.createElement('div');
@@ -143,6 +146,16 @@
         var result = await send({ type: 'test' });
         if (result.error) { statusElement.textContent = result.error; return; }
         statusElement.textContent = result.message + (result.ok ? ' Your webhook is set up.' : permissionNote(result.permission, ''));
+      } catch (error) {
+        statusElement.textContent = 'Could not contact the Webhook plugin. Try reopening this page.';
+      } finally { setBusy(false); }
+    };
+
+    document.getElementById('pin').onclick = async function () {
+      setBusy(true);
+      try {
+        var result = await send({ type: 'pin' });
+        statusElement.textContent = result.error || result.message;
       } catch (error) {
         statusElement.textContent = 'Could not contact the Webhook plugin. Try reopening this page.';
       } finally { setBusy(false); }

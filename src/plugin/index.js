@@ -119,6 +119,31 @@ async function deliver(config, text) {
   }
 }
 
+// A timeline pin whose action asks the watch for a voice reply and hands it to send_message as args.text.
+// Inserting the same id again updates the pin, so this doubles as "refresh".
+var PIN_ID = 'webhook-send-note';
+
+async function insertPin(config) {
+  var pin = {
+    id: PIN_ID,
+    time: new Date().toISOString(),
+    layout: {
+      type: 'genericPin',
+      title: 'Send note',
+      subtitle: config ? 'to ' + config.host : 'Webhook',
+      tinyIcon: 'system://images/NOTIFICATION_FLAG',
+    },
+    actions: [{ title: 'Send note', type: 'pluginAction', action: 'send_message', inputArg: 'text' }],
+  };
+  try {
+    await Pebble.insertTimelinePin(pin);
+    return { ok: true };
+  } catch (error) {
+    console.error('Pin insert failed: ' + (error && error.name) + ' ' + (error && error.message));
+    return { ok: false, error: 'Could not add the pin' + (error && error.name === 'NotAllowedError' ? ': allow the Timeline permission for Webhook.' : '.') };
+  }
+}
+
 function summary(config) {
   return {
     configured: !!config,
@@ -189,6 +214,13 @@ Pebble.registerConfigHandler(async function (message, respond) {
       var result = await deliver(config, 'Test message from the Pebble Webhook plugin');
       result.permission = await permissionState(config.host);
       respond(result);
+      return;
+    }
+
+    case 'pin': {
+      var pinConfig = await loadConfig();
+      var pinResult = await insertPin(pinConfig);
+      respond(pinResult.ok ? { ok: true, message: 'Pin added. Look for "Send note" in your watch\'s timeline.' } : { error: pinResult.error });
       return;
     }
 

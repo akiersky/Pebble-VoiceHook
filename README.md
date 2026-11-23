@@ -19,7 +19,7 @@ Early. Unit tests pass (`npm test`). Builds to `build/pebble-webhook.pbw` with p
 Findings from testing on Android (2026-11-23):
 1. A host typed in settings works with no `Internet` domain declared. The phone asks the user to allow
    the host the first time it is used (tested against webhook.site). CONFIRMED.
-2. Custom request headers: pending confirmation of the header arriving at the receiver.
+2. Custom request headers arrive at the receiver, along with the JSON body (`text`, `timestamp`, `source`). CONFIRMED.
 3. Triggering `send_message` from the watch: not yet tested. Options are Pebble's Index agent (voice),
    a timeline pin or notification with a `pluginAction` (`inputArg: "text"`), or a small watchapp.
 4. Install: `pebble install build/pebble-webhook.pbw --adb` (file first; `--adb` takes an optional device
