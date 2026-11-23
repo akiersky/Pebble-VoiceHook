@@ -93,7 +93,12 @@ function cleanConfig(message, previous) {
     if (command.length > 100 || /[\u0000-\u001f]/.test(command)) return { error: 'A command is too long or has invalid characters.' };
     commands[SLOTS[j]] = { command: command, destination: seen[raw.destination] ? raw.destination : fallback };
   }
-  return { config: { v: 2, destinations: destinations, noteDestination: noteDestination, commands: commands } };
+  var rawLabels = message.labels && typeof message.labels === 'object' ? message.labels : {};
+  var labels = { up: stringValue(rawLabels.up), down: stringValue(rawLabels.down) };
+  if (labels.up.length > 24 || labels.down.length > 24 || /[\u0000-\u001f]/.test(labels.up + labels.down)) {
+    return { error: 'Button labels can be up to 24 characters.' };
+  }
+  return { config: { v: 2, destinations: destinations, noteDestination: noteDestination, commands: commands, labels: labels } };
 }
 
 // The request for a message or button command, as { url, options }.
@@ -122,7 +127,7 @@ function migrate(stored) {
   if (stored && stored.v === 2 && Array.isArray(stored.destinations)) return stored;
   if (stored && stored.url) {
     var destination = { id: 'main', name: 'Webhook', url: stored.url, host: stored.host, https: stored.https, headers: stored.headers || [], format: stored.format || 'json', field: stored.field || 'text' };
-    return { v: 2, destinations: [destination], noteDestination: 'main', commands: {} };
+    return { v: 2, destinations: [destination], noteDestination: 'main', commands: {}, labels: { up: '', down: '' } };
   }
   return null;
 }
@@ -207,6 +212,7 @@ function summary(config) {
     }) : [],
     noteDestination: config ? config.noteDestination : '',
     commands: config ? config.commands : {},
+    labels: config && config.labels ? config.labels : { up: '', down: '' },
   };
 }
 
@@ -254,6 +260,13 @@ Pebble.registerActionHandler(async function (req, respond) {
     var sent = await deliver(findDestination(current, entry.destination), 'command', entry.command, 'Sent ' + entry.command);
     if (sent.ok) respond.ok({ text: sent.message });
     else fail(respond, sent);
+    return;
+  }
+  // Used by the watchapp to show the user's own reminders next to the Up and Down buttons.
+  if (req.action === 'get_labels') {
+    var stored = await loadConfig();
+    var labels = stored && stored.labels ? stored.labels : { up: '', down: '' };
+    respond.ok({ text: JSON.stringify({ up: labels.up, down: labels.down }) });
     return;
   }
   console.error('Unsupported action: ' + req.action);

@@ -9,6 +9,17 @@ function reply(ok, message) {
   });
 }
 
+// The user's reminders for the Up and Down buttons live in the plugin's private settings; the watch shows them.
+Pebble.addEventListener('ready', function () {
+  Pebble.invokeAction({ plugin: PLUGIN_UUID, action: 'get_labels', args: {} }).then(function (result) {
+    if (!result.ok) return;
+    var labels = JSON.parse(result.text);
+    Pebble.sendAppMessage({ UP_LABEL: labels.up || '', DOWN_LABEL: labels.down || '' }, function () {}, function () {});
+  }, function (error) {
+    console.error('get_labels failed: ' + (error && error.name));
+  });
+});
+
 // This file goes through an ES5-only bundler, so no async/await here.
 Pebble.addEventListener('appmessage', function (event) {
   var payload = event.payload || {};

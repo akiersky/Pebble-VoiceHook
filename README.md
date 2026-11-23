@@ -28,6 +28,13 @@ Findings from testing on Android (2026-11-23):
    serial and otherwise swallows the path). Needs Android wireless debugging paired with `adb pair`.
    Publish with `pebble publish` when ready.
 
+## Watchapp (`app/`)
+`app/` is the same plugin bundled with a small watchapp: Select dictates a note, Up and Down send
+fixed commands (press, double press, hold). Run `app/sync.sh` to copy the plugin into it, then
+`pebble build` inside `app/`. Assign it to a Quick Launch button on the watch to start a voice note from
+anywhere. It then starts dictating at once and closes after the confirmation.
+Icons are from https://github.com/pebble-dev/iconography (Apache 2.0), see `app/resources/images/ATTRIBUTION.md`.
+
 ## Develop
 ```
 npm test

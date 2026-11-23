@@ -42,6 +42,8 @@ test('cleanConfig defaults, destinations and commands', () => {
   assert.ok(cleanConfig({ destinations: [dest({ url: 'nope' })] }).error);
   assert.ok(cleanConfig({ destinations: [dest({ id: 'bad id!' })] }).error);
   assert.deepStrictEqual(cleanConfig({ destinations: [] }).config.destinations, []);
+  assert.deepStrictEqual(cleanConfig({ destinations: [], labels: { up: ' Lights ', down: '' } }).config.labels, { up: 'Lights', down: '' });
+  assert.ok(cleanConfig({ destinations: [], labels: { up: 'x'.repeat(25) } }).error);
 });
 
 test('cleanConfig keeps a saved header value per destination', () => {

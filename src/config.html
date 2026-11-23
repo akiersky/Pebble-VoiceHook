@@ -98,7 +98,13 @@
     <section>
       <h2>Button commands</h2>
       <p class="hint" style="margin: 0 0 4px;">Send a fixed command with Up or Down on the watchapp. Leave a command empty to turn that button off.</p>
-      <div id="commands"></div>
+      <label for="labelUp">Up button reminder</label>
+      <input id="labelUp" type="text" maxlength="24" autocomplete="off" placeholder="e.g. Lights">
+      <div id="commandsUp"></div>
+      <label for="labelDown">Down button reminder</label>
+      <input id="labelDown" type="text" maxlength="24" autocomplete="off" placeholder="e.g. Garage">
+      <div id="commandsDown"></div>
+      <p class="hint">The reminder is shown on the watch with an arrow pointing at the button. Write whatever helps you remember what it does.</p>
     </section>
 
     <div class="actions" style="margin: 0 0 12px;">
@@ -123,7 +129,12 @@
     ];
     var destinationsBox = document.getElementById('destinations');
     var noteSelect = document.getElementById('noteDestination');
-    var commandsBox = document.getElementById('commands');
+    var commandsUp = document.getElementById('commandsUp');
+    var commandsDown = document.getElementById('commandsDown');
+    var labelUp = document.getElementById('labelUp');
+    var labelDown = document.getElementById('labelDown');
+
+    function commandRows() { return Array.prototype.slice.call(commandsUp.children).concat(Array.prototype.slice.call(commandsDown.children)); }
     var saveButton = document.getElementById('save');
     var unlinkButton = document.getElementById('unlink');
     var pinButton = document.getElementById('pin');
@@ -237,26 +248,27 @@
 
     function refreshSelects() {
       fillSelect(noteSelect);
-      Array.prototype.forEach.call(commandsBox.children, function (row) { fillSelect(row.destination); });
+      commandRows().forEach(function (row) { fillSelect(row.destination); });
     }
 
     // ----- commands -----
     function buildCommands(commands) {
-      commandsBox.replaceChildren();
+      commandsUp.replaceChildren();
+      commandsDown.replaceChildren();
       SLOTS.forEach(function (slot) {
         var entry = commands[slot[0]] || {};
         var input = el('input', { type: 'text', autocomplete: 'off', autocapitalize: 'none', spellcheck: false, placeholder: 'e.g. lights_off', value: entry.command || '' });
         var select = el('select', {});
         var row = el('div', { className: 'command' }, [el('span', { textContent: slot[1] }), input, select]);
         row.slot = slot[0]; row.input = input; row.destination = select;
-        commandsBox.appendChild(row);
+        (slot[0].indexOf('up_') === 0 ? commandsUp : commandsDown).appendChild(row);
         fillSelect(select, entry.destination);
       });
     }
 
     function readCommands() {
       var out = {};
-      Array.prototype.forEach.call(commandsBox.children, function (row) {
+      commandRows().forEach(function (row) {
         out[row.slot] = { command: row.input.value, destination: row.destination.value };
       });
       return out;
@@ -270,6 +282,8 @@
       if (!list.length) addDestination({}, true);
       fillSelect(noteSelect, state.noteDestination);
       buildCommands(state.commands || {});
+      labelUp.value = (state.labels && state.labels.up) || '';
+      labelDown.value = (state.labels && state.labels.down) || '';
       var insecure = state.insecure || [];
       warning.hidden = !insecure.length;
       if (insecure.length) warning.textContent = insecure.join(', ') + ' uses http, so messages and headers are sent without encryption. Prefer https.';
@@ -291,7 +305,7 @@
       setBusy(true);
       setStatus('Saving…');
       try {
-        var result = await send({ type: 'save', destinations: readDestinations(), noteDestination: noteSelect.value, commands: readCommands() });
+        var result = await send({ type: 'save', destinations: readDestinations(), noteDestination: noteSelect.value, commands: readCommands(), labels: { up: labelUp.value, down: labelDown.value } });
         if (result.error) { setStatus(result.error, 'error'); return; }
         var openIds = Array.prototype.filter.call(destinationsBox.children, function (c) { return c.open; }).map(function (c) { return c.dataset.id; });
         showState(result);

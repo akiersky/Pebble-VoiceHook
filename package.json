@@ -68,6 +68,18 @@
           "destructive": false,
           "requiresConfirmation": false,
           "callerPermissions": []
+        },
+        {
+          "name": "get_labels",
+          "description": "Internal use by the Webhook watchapp: returns the button labels as JSON. Not for general use.",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
         }
       ]
     },
