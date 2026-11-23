@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Webhook</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 16px -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    p { line-height: 1.45; }
+    label { display: block; font-size: 14px; font-weight: 650; margin: 20px 0 6px; }
+    input, select {
+      box-sizing: border-box; width: 100%; padding: 11px 12px; font-size: 15px;
+      border: 1px solid rgba(128,128,128,.45); border-radius: 8px;
+      background: transparent; color: inherit;
+    }
+    .header-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .header-row input:first-child { flex: 2; }
+    .header-row input:nth-child(2) { flex: 3; }
+    .header-row button { flex: none; padding: 0 12px; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+    button { padding: 11px 16px; border: 0; border-radius: 8px; font-size: 15px; background: #4772fa; color: white; }
+    button.secondary { background: rgba(128,128,128,.2); color: inherit; }
+    button:disabled { opacity: .55; }
+    #status { margin-top: 16px; padding: 11px 12px; border-radius: 8px; background: rgba(128,128,128,.15); font-size: 14px; line-height: 1.4; }
+    .hint { opacity: .72; font-size: 13px; }
+    #warning { margin: 16px 0 0; padding: 10px 12px; border-radius: 8px; background: #fdecc8; color: #5c3d00; font-size: 14px; line-height: 1.45; }
+  </style>
+</head>
+<body>
+  <h1>Webhook</h1>
+  <p>Send notes from your Pebble to any URL you choose. Each message is sent as a POST request with the headers you set below.</p>
+
+  <label for="url">URL</label>
+  <input id="url" type="url" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://example.com/capture">
+  <p class="hint">Use https. The first test message asks you to allow Webhook to connect to this host.</p>
+
+  <label>Headers</label>
+  <div id="headers"></div>
+  <button id="addHeader" class="secondary" type="button">Add header</button>
+  <p class="hint">Header values are kept in this plugin's private settings on this phone. Leave a saved value blank to keep it. For example, name <code>Authorization</code>, value <code>Bearer your-token</code>.</p>
+
+  <label for="format">Message format</label>
+  <select id="format">
+    <option value="json">JSON: {"text": "...", "timestamp": "...", "source": "pebble"}</option>
+    <option value="text">Plain text: just the message</option>
+  </select>
+
+  <div id="fieldWrap">
+    <label for="field">JSON field for the message</label>
+    <input id="field" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" value="text">
+  </div>
+
+  <div class="buttons">
+    <button id="save" type="button">Save</button>
+    <button id="test" class="secondary" type="button">Send test message</button>
+    <button id="unlink" class="secondary" type="button">Clear settings</button>
+  </div>
+  <p id="warning" role="alert" hidden></p>
+  <div id="status">Starting the Webhook plugin…</div>
+
+  <script>
+    var urlInput = document.getElementById('url');
+    var headersBox = document.getElementById('headers');
+    var formatSelect = document.getElementById('format');
+    var fieldInput = document.getElementById('field');
+    var fieldWrap = document.getElementById('fieldWrap');
+    var saveButton = document.getElementById('save');
+    var testButton = document.getElementById('test');
+    var unlinkButton = document.getElementById('unlink');
+    var addButton = document.getElementById('addHeader');
+    var statusElement = document.getElementById('status');
+    var warning = document.getElementById('warning');
+
+    function send(message) { return Pebble.sendMessage('plugin', message); }
+
+    function setBusy(busy) { saveButton.disabled = busy; testButton.disabled = busy; unlinkButton.disabled = busy; }
+
+    function addHeaderRow(name, hasValue) {
+      var row = document.createElement('div');
+      row.className = 'header-row';
+      var nameInput = document.createElement('input');
+      nameInput.type = 'text'; nameInput.placeholder = 'Name';
+      nameInput.autocapitalize = 'none'; nameInput.spellcheck = false; nameInput.value = name || '';
+      var valueInput = document.createElement('input');
+      valueInput.type = 'password'; valueInput.autocomplete = 'off'; valueInput.spellcheck = false;
+      valueInput.placeholder = hasValue ? 'Saved on this phone' : 'Value';
+      var remove = document.createElement('button');
+      remove.type = 'button'; remove.className = 'secondary'; remove.textContent = '×';
+      remove.setAttribute('aria-label', 'Remove header');
+      remove.onclick = function () { row.remove(); };
+      row.append(nameInput, valueInput, remove);
+      headersBox.appendChild(row);
+    }
+
+    function readHeaders() {
+      return Array.prototype.map.call(headersBox.children, function (row) {
+        return { name: row.children[0].value, value: row.children[1].value };
+      });
+    }
+
+    function syncFormat() { fieldWrap.hidden = formatSelect.value !== 'json'; }
+    formatSelect.onchange = syncFormat;
+    addButton.onclick = function () { addHeaderRow('', false); };
+
+    function showState(state) {
+      urlInput.value = state.url || '';
+      formatSelect.value = state.format || 'json';
+      fieldInput.value = state.field || 'text';
+      syncFormat();
+      headersBox.replaceChildren();
+      (state.headers || []).forEach(function (header) { addHeaderRow(header.name, header.hasValue); });
+      if (!state.headers || !state.headers.length) addHeaderRow('', false);
+      warning.hidden = !state.insecure;
+      if (state.insecure) warning.textContent = 'This URL uses http, so messages and headers are sent without encryption. Prefer https.';
+      statusElement.textContent = state.configured ? 'Sending to ' + state.host + '.' : 'No webhook set yet.';
+    }
+
+    function permissionNote(permission, host) {
+      if (permission === 'granted') return '';
+      if (permission === 'denied') return ' Webhook is blocked from ' + host + '. Allow it under the plugin\'s Permissions.';
+      return '';
+    }
+
+    saveButton.onclick = async function () {
+      setBusy(true);
+      statusElement.textContent = 'Saving…';
+      try {
+        var result = await send({ type: 'save', url: urlInput.value, headers: readHeaders(), format: formatSelect.value, field: fieldInput.value });
+        if (result.error) { statusElement.textContent = result.error; return; }
+        showState(result);
+        statusElement.textContent = 'Saved. Tap "Send test message" to check it and allow the connection.' + permissionNote(result.permission, result.host);
+      } catch (error) {
+        statusElement.textContent = 'Could not contact the Webhook plugin. Try reopening this page.';
+      } finally { setBusy(false); }
+    };
+
+    testButton.onclick = async function () {
+      setBusy(true);
+      statusElement.textContent = 'Sending a test message…';
+      try {
+        var result = await send({ type: 'test' });
+        if (result.error) { statusElement.textContent = result.error; return; }
+        statusElement.textContent = result.message + (result.ok ? ' Your webhook is set up.' : permissionNote(result.permission, ''));
+      } catch (error) {
+        statusElement.textContent = 'Could not contact the Webhook plugin. Try reopening this page.';
+      } finally { setBusy(false); }
+    };
+
+    unlinkButton.onclick = async function () {
+      setBusy(true);
+      try { showState(await send({ type: 'unlink' })); }
+      catch (error) { statusElement.textContent = 'Could not clear the settings. Try reopening this page.'; }
+      finally { setBusy(false); }
+    };
+
+    Pebble.addEventListener('ready', async function (event) {
+      if (event.target !== 'plugin') return;
+      showState(await send({ type: 'status' }));
+    });
+  </script>
+</body>
+</html>

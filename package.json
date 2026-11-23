@@ -1,0 +1,40 @@
+{
+  "name": "webhook",
+  "author": "Kiersky",
+  "version": "0.1.0",
+  "scripts": {
+    "test": "node --test test/*.test.cjs"
+  },
+  "pebble": {
+    "displayName": "Webhook",
+    "uuid": "020583bc-828e-454c-b579-de76d60ec3e6",
+    "sdkVersion": "3",
+    "plugin": {
+      "description": "Sends your notes to a URL you choose, as a POST request with the headers you set. Use it to feed notes, todos and ideas from your Pebble into your own server, automation or note system.",
+      "script": "src/plugin/index.js",
+      "actions": [
+        {
+          "name": "send_message",
+          "description": "Send the user's text to their own configured webhook URL as an HTTP POST. Use only when the user explicitly asks to send, save, capture or log something to their webhook.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The complete message to send, preferably the user's exact words."
+              }
+            },
+            "required": ["text"],
+            "additionalProperties": false
+          },
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        }
+      ]
+    },
+    "configPage": "src/config.html",
+    "projectType": "plugin"
+  }
+}
