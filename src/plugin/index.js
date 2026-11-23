@@ -5,7 +5,7 @@
 var CONFIG_KEY = 'webhook.config.v2';
 var LEGACY_KEY = 'webhook.config.v1';
 var MAX_HEADERS = 10;
-var MAX_DESTINATIONS = 5;
+var MAX_DESTINATIONS = 10;
 var SLOTS = ['up_single', 'up_double', 'up_hold', 'down_single', 'down_double', 'down_hold'];
 var MAX_TEXT = 8000;
 var FORBIDDEN_HEADERS = ['host', 'content-length', 'connection', 'transfer-encoding', 'cookie'];

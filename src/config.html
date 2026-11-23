@@ -307,7 +307,10 @@
     }
 
     saveButton.onclick = function () { saveAll(); };
-    addDestinationButton.onclick = function () { addDestination({}, true); };
+    addDestinationButton.onclick = function () {
+      if (destinationsBox.children.length >= 10) { setStatus('You can have up to 10 destinations.', 'error'); return; }
+      addDestination({}, true);
+    };
 
     pinButton.onclick = async function () {
       setBusy(true);
