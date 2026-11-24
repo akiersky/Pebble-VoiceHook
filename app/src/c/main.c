@@ -15,16 +15,7 @@
 #define FRAME_MS 33
 #define ICON_COUNT 5
 
-// Confirmation icons are drawn at about 70% of the screen width; the images are made at these sizes.
-#if defined(PBL_PLATFORM_GABBRO)
-#define ICON_SIZE 188
-#elif defined(PBL_PLATFORM_EMERY)
-#define ICON_SIZE 144
-#elif defined(PBL_PLATFORM_CHALK)
-#define ICON_SIZE 128
-#else
-#define ICON_SIZE 104
-#endif
+// ICON_SIZE (about 70% of the screen width) comes from contract.h, generated from screens.json.
 #define ICON_HALF (ICON_SIZE / 2)
 
 enum { PersistUpLabel = 1, PersistDownLabel = 2 };

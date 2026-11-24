@@ -24,6 +24,9 @@ def configure(ctx):
 
 
 def build(ctx):
+    # Fail rather than ship a stale copy of the plugin or a stale manifest: run app/sync.sh first.
+    if ctx.exec_command(['node', os.path.join(ctx.path.abspath(), 'sync.js'), '--check']) != 0:
+        ctx.fatal('The watchapp is out of date. Run app/sync.sh.')
     ctx.load('pebble_sdk')
 
     build_worker = os.path.exists('worker_src')

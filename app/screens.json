@@ -1,0 +1,6 @@
+[
+  { "name": "144x168", "platforms": ["basalt", "diorite", "flint"], "icon": 104 },
+  { "name": "180x180", "platforms": ["chalk"], "icon": 128 },
+  { "name": "200x228", "platforms": ["emery"], "icon": 144 },
+  { "name": "260x260", "platforms": ["gabbro"], "icon": 188 }
+]

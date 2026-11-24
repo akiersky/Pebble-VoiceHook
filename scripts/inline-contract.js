@@ -36,6 +36,13 @@ function header() {
   for (const slot of Contract.SLOTS) lines.push('#define SLOT_' + slot.id.toUpperCase() + ' ' + slot.wire);
   lines.push('', '#define RESULT_OK ' + Contract.WIRE.RESULT_OK, '#define RESULT_FAIL ' + Contract.WIRE.RESULT_FAIL);
   lines.push('#define WIRE_MESSAGE_MAX ' + Contract.WIRE.MESSAGE_MAX, '#define LABEL_MAX ' + (Contract.LIMITS.LABEL + 1), '');
+  // Confirmation icon size for each kind of screen, from app/screens.json.
+  const screens = JSON.parse(read('app/screens.json'));
+  screens.forEach((screen, i) => {
+    const test = screen.platforms.map((p) => 'defined(PBL_PLATFORM_' + p.toUpperCase() + ')').join(' || ');
+    lines.push((i === 0 ? '#if ' : '#elif ') + test, '#define ICON_SIZE ' + screen.icon);
+  });
+  lines.push('#else', '#error "Add this platform to app/screens.json"', '#endif', '');
   return lines.join('\n');
 }
 

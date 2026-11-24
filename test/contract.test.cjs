@@ -94,3 +94,71 @@ test('the watchapp build takes its plugin block and message keys from the contra
   const action = rootManifest.pebble.plugin.actions.find((a) => a.name === 'send_command');
   assert.deepStrictEqual(action.parameters.properties.slot.enum, Contract.SLOTS.map((slot) => slot.id));
 });
+
+const appSync = require('../app/sync.js');
+
+function pngSize(file) {
+  const bytes = fs.readFileSync(file);
+  return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+}
+
+test('every icon image has the size the screen table says, and every screen has all of them', () => {
+  const screens = JSON.parse(fs.readFileSync(path.join(root, 'app/screens.json'), 'utf8'));
+  const header = fs.readFileSync(path.join(root, 'app/src/c/contract.h'), 'utf8');
+  for (const screen of screens) {
+    assert.ok(header.includes('#define ICON_SIZE ' + screen.icon), screen.name);
+    for (const icon of ['rocket', 'thumbs_up', 'music', 'tide']) {
+      const file = path.join(root, 'app/resources/images', icon + '_' + screen.name + '.png');
+      assert.deepStrictEqual(pngSize(file), [screen.icon, screen.icon], icon + ' ' + screen.name);
+    }
+  }
+});
+
+test('the watchapp manifest lists each screen platform and each icon resource once', () => {
+  execFileSync('sh', [path.join(root, 'app/sync.sh')]);
+  const app = JSON.parse(fs.readFileSync(path.join(root, 'app/package.json'), 'utf8')).pebble;
+  const screens = JSON.parse(fs.readFileSync(path.join(root, 'app/screens.json'), 'utf8'));
+  assert.deepStrictEqual(app.targetPlatforms, screens.flatMap((screen) => screen.platforms));
+  const permissions = app.usesPermissions.map((p) => p.name);
+  assert.deepStrictEqual(permissions, ['Timeline', 'InvokeAction']);
+  for (const entry of app.resources.media) {
+    assert.ok(fs.existsSync(path.join(root, 'app/resources', entry.file)), entry.file);
+  }
+  const byPlatform = {};
+  for (const entry of app.resources.media.filter((e) => e.name === 'IMAGE_ROCKET')) {
+    for (const platform of entry.targetPlatforms) byPlatform[platform] = (byPlatform[platform] || 0) + 1;
+  }
+  assert.deepStrictEqual(Object.values(byPlatform).filter((n) => n !== 1), []);
+  assert.deepStrictEqual(Object.keys(byPlatform).sort(), [...app.targetPlatforms].sort());
+});
+
+test('a freshly synced watchapp is not stale, and a stale copy is noticed', () => {
+  execFileSync('sh', [path.join(root, 'app/sync.sh')]);
+  assert.deepStrictEqual(appSync.stale(), []);
+  const copy = path.join(root, 'app/src/plugin/index.js');
+  const original = fs.readFileSync(copy, 'utf8');
+  try {
+    fs.writeFileSync(copy, original + '\n// stale\n');
+    assert.deepStrictEqual(appSync.stale(), ['src/plugin/index.js']);
+  } finally {
+    fs.writeFileSync(copy, original);
+  }
+});
+
+test('the relay names the bundled plugin by the watchapp uuid', () => {
+  const base = JSON.parse(fs.readFileSync(path.join(root, 'app/package.base.json'), 'utf8'));
+  const relay = fs.readFileSync(path.join(root, 'app/src/pkjs/index.js'), 'utf8');
+  assert.ok(relay.includes("PLUGIN_UUID = '" + base.pebble.uuid + "'"));
+});
+
+test('the manifest declares exactly the actions the plugin handles and the relay uses', async () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).pebble.plugin.actions.map((a) => a.name);
+  const t = await start();
+  for (const name of manifest) {
+    const result = await t.action({ action: name, args: {} });
+    assert.notStrictEqual(result.code, 'PLUGIN_UNAVAILABLE', name);
+  }
+  assert.strictEqual((await t.action({ action: 'not_declared', args: {} })).code, 'PLUGIN_UNAVAILABLE');
+  const relay = fs.readFileSync(path.join(root, 'app/src/pkjs/index.js'), 'utf8');
+  for (const [, name] of relay.matchAll(/action: '([a-z_]+)'/g)) assert.ok(manifest.includes(name), name);
+});

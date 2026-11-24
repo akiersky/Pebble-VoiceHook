@@ -1,17 +1,4 @@
 #!/bin/sh
-# Builds the watchapp project from the standalone plugin in the parent folder:
-# copies the plugin script and settings page, and merges the plugin block into package.json.
+# Builds the watchapp project from the standalone plugin in the parent folder (see sync.js).
 set -e
-cd "$(dirname "$0")"
-(cd .. && node scripts/inline-contract.js)
-mkdir -p src/plugin
-cp ../src/plugin/index.js src/plugin/index.js
-cp ../src/config.html src/config.html
-node -e '
-const base = require("./package.base.json");
-const root = require("../package.json");
-base.pebble.plugin = root.pebble.plugin;
-base.pebble.configPage = root.pebble.configPage;
-base.pebble.messageKeys = require("../src/contract.js").WIRE.KEYS;
-require("fs").writeFileSync("package.json", JSON.stringify(base, null, 2) + "\n");
-'
+node "$(dirname "$0")/sync.js" "$@"

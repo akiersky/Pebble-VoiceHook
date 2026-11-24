@@ -30,14 +30,27 @@ Findings from testing on Android (2026-11-23):
 
 ## Watchapp (`app/`)
 `app/` is the same plugin bundled with a small watchapp: Select dictates a note, Up and Down send
-fixed commands (press, double press, hold). Run `app/sync.sh` to copy the plugin into it, then
-`pebble build` inside `app/`. Assign it to a Quick Launch button on the watch to start a voice note from
-anywhere. It then starts dictating at once and closes after the confirmation.
+fixed commands (press, double press, hold). Assign it to a Quick Launch button on the watch to start a voice
+note from anywhere; it then starts dictating at once and closes after the confirmation. It also closes after a
+minute of nothing.
+
+Build it with `app/sync.sh` and then `pebble build` inside `app/`. `app/sync.js` copies the plugin and the
+settings page in and writes `app/package.json` (plugin block, permissions, message keys, target platforms and
+per-screen icon resources). The build stops with "out of date" if you forget.
 Icons are from https://github.com/pebble-dev/iconography (Apache 2.0), see `app/resources/images/ATTRIBUTION.md`.
+
+## One place for each fact
+- `src/contract.js`: message names, limits, error-target vocabulary, the six button slots and the
+  watch-to-phone message keys. `npm run contract` copies it into the plugin, the settings page, the phone-side
+  relay (`app/src/pkjs/index.js`), `app/src/c/contract.h` and the `slot` enum in `package.json`. A test fails
+  if any copy is stale.
+- `app/screens.json`: the watch screen sizes and the icon size for each. It drives the C `ICON_SIZE`, the
+  rendered images (`app/tools/render-art.py`), the manifest's target platforms and per-screen resources.
+- See `GLOSSARY.md` for the terms.
 
 ## Develop
 ```
-npm test
+npm test                                 # unit tests plus the real settings page against the real plugin
 export PATH=~/.venvs/pebble/bin:$PATH   # pebble-tool needs uv on PATH (pip install uv in the same venv)
 pebble build                             # SDK 4.44+, pebble-tool 5.1.0+
 pebble install --adb                     # Android over adb, or: pebble install --phone <ip>

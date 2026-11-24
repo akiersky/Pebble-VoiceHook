@@ -1,7 +1,7 @@
 {
   "name": "webhook-app",
   "author": "kiersky",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "keywords": [
     "pebble-app"
   ],
@@ -12,14 +12,6 @@
     "uuid": "c0756590-bd59-464d-82f3-acd4499077d4",
     "sdkVersion": "3",
     "enableMultiJS": true,
-    "targetPlatforms": [
-      "basalt",
-      "chalk",
-      "diorite",
-      "emery",
-      "flint",
-      "gabbro"
-    ],
     "watchapp": {
       "watchface": false
     },
@@ -35,151 +27,10 @@
           "type": "raw",
           "name": "SENT_ANIM",
           "file": "images/sent_anim.pdc"
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_ROCKET",
-          "file": "images/rocket_144x168.png",
-          "targetPlatforms": [
-            "basalt",
-            "diorite",
-            "flint"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_ROCKET",
-          "file": "images/rocket_180x180.png",
-          "targetPlatforms": [
-            "chalk"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_ROCKET",
-          "file": "images/rocket_200x228.png",
-          "targetPlatforms": [
-            "emery"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_ROCKET",
-          "file": "images/rocket_260x260.png",
-          "targetPlatforms": [
-            "gabbro"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_THUMBS_UP",
-          "file": "images/thumbs_up_144x168.png",
-          "targetPlatforms": [
-            "basalt",
-            "diorite",
-            "flint"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_THUMBS_UP",
-          "file": "images/thumbs_up_180x180.png",
-          "targetPlatforms": [
-            "chalk"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_THUMBS_UP",
-          "file": "images/thumbs_up_200x228.png",
-          "targetPlatforms": [
-            "emery"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_THUMBS_UP",
-          "file": "images/thumbs_up_260x260.png",
-          "targetPlatforms": [
-            "gabbro"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_MUSIC",
-          "file": "images/music_144x168.png",
-          "targetPlatforms": [
-            "basalt",
-            "diorite",
-            "flint"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_MUSIC",
-          "file": "images/music_180x180.png",
-          "targetPlatforms": [
-            "chalk"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_MUSIC",
-          "file": "images/music_200x228.png",
-          "targetPlatforms": [
-            "emery"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_MUSIC",
-          "file": "images/music_260x260.png",
-          "targetPlatforms": [
-            "gabbro"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_TIDE",
-          "file": "images/tide_144x168.png",
-          "targetPlatforms": [
-            "basalt",
-            "diorite",
-            "flint"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_TIDE",
-          "file": "images/tide_180x180.png",
-          "targetPlatforms": [
-            "chalk"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_TIDE",
-          "file": "images/tide_200x228.png",
-          "targetPlatforms": [
-            "emery"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_TIDE",
-          "file": "images/tide_260x260.png",
-          "targetPlatforms": [
-            "gabbro"
-          ]
         }
       ]
     },
     "usesPermissions": [
-      {
-        "name": "Timeline",
-        "reason": "To put a \"Send note\" pin on your watch's timeline",
-        "required": false
-      },
       {
         "name": "InvokeAction",
         "reason": "To send your notes and button commands through the Webhook plugin",

@@ -12,3 +12,15 @@
 #define RESULT_FAIL 0
 #define WIRE_MESSAGE_MAX 90
 #define LABEL_MAX 25
+
+#if defined(PBL_PLATFORM_BASALT) || defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_FLINT)
+#define ICON_SIZE 104
+#elif defined(PBL_PLATFORM_CHALK)
+#define ICON_SIZE 128
+#elif defined(PBL_PLATFORM_EMERY)
+#define ICON_SIZE 144
+#elif defined(PBL_PLATFORM_GABBRO)
+#define ICON_SIZE 188
+#else
+#error "Add this platform to app/screens.json"
+#endif

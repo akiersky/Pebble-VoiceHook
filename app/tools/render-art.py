@@ -3,7 +3,7 @@
 
 Needs: pip install resvg_py pillow
 """
-import io, os, re
+import io, json, os, re
 import resvg_py
 from PIL import Image
 
@@ -32,7 +32,7 @@ render(icon_svg, 48, 48).save(os.path.join(STORE, 'icon-48.png'))
 # (The main-screen microphone is drawn in code on the watch, so it can move and turn.)
 
 # ---- confirmation icons, one size per screen class (about 70% of the screen width)
-ICON_SIZES = {'144x168': 104, '180x180': 128, '200x228': 144, '260x260': 188}
+ICON_SIZES = {screen['name']: screen['icon'] for screen in json.load(open(os.path.join(HERE, '..', 'screens.json')))}
 CONFIRM = {'rocket': '80px_Rocket.svg', 'thumbs_up': 'Pebble_80x80_Thumbs_up.svg',
            'music': 'Pebble_80x80_Music_event.svg', 'tide': 'Pebble_80x80_Tide_is_high.svg'}
 for screen, size in ICON_SIZES.items():

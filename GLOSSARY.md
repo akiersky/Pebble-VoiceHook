@@ -1,0 +1,16 @@
+# Glossary
+
+- **Webhook** (in the code, a *destination*): a named URL with its own headers and format. Up to 10. The
+  settings page says "webhook"; the code and the contract say `destination`.
+- **Note**: dictated text sent with the Select button (or the timeline pin). Goes to the voice-note webhook.
+  Confirmed with the paper plane.
+- **Command**: a fixed word the user chose for a button slot, sent as `{"command": "<name>"}`.
+- **Slot**: one of the six button gestures (Up or Down, each as press, double press, hold). Listed once in
+  `src/contract.js`; `wire` is the number the watch sends.
+- **Reminder**: the user's own text shown next to the Up and Down buttons on the watch.
+- **Extra headers**: headers on a command that are added to its webhook's headers. Same name: both values are
+  sent, comma-separated.
+- **Contract**: what the plugin and the settings page agree on (`src/contract.js`).
+- **Relay**: the phone-side script in the watchapp (`app/src/pkjs/index.js`) that passes the watch's requests
+  to the plugin.
+- **Target**: the field of the settings page an error belongs to, so the page can mark it.
