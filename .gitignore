@@ -8,3 +8,4 @@ app/.lock-waf*
 app/package.json
 app/src/plugin
 app/src/config.html
+app/screenshots

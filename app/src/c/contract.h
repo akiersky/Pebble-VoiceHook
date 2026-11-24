@@ -16,11 +16,11 @@
 #if defined(PBL_PLATFORM_BASALT) || defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_FLINT)
 #define ICON_SIZE 104
 #elif defined(PBL_PLATFORM_CHALK)
-#define ICON_SIZE 128
+#define ICON_SIZE 100
 #elif defined(PBL_PLATFORM_EMERY)
 #define ICON_SIZE 144
 #elif defined(PBL_PLATFORM_GABBRO)
-#define ICON_SIZE 188
+#define ICON_SIZE 150
 #else
 #error "Add this platform to app/screens.json"
 #endif

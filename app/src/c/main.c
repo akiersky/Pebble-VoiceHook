@@ -17,8 +17,17 @@
 
 // ICON_SIZE (about 70% of the screen width) comes from contract.h, generated from screens.json.
 #define ICON_HALF (ICON_SIZE / 2)
+// The message sits under the icon; on a round screen it starts higher, where the circle is still wide.
+#define MESSAGE_Y_PERCENT PBL_IF_ROUND_ELSE(62, 69)
 
 enum { PersistUpLabel = 1, PersistDownLabel = 2 };
+
+// Store screenshots only (SCREENSHOT_MODE=1 pebble build): a RESULT of 10 + n shows confirmation icon n and keeps
+// it on screen, so tools/capture-screenshots.sh can photograph each one at rest. Normal builds never define it.
+#if defined(SCREENSHOT_MODE)
+static int s_forced_icon = -1;
+static int s_freeze_percent = -1;   // RESULT 100 + n: hold the plane animation n percent of the way through
+#endif
 
 typedef enum { StateIdle, StateStarting, StateSending, StateOk, StateFail } State;
 typedef enum { IconRocket, IconThumbsUp, IconMusic, IconTide, IconSent } Icon;
@@ -279,6 +288,9 @@ static void prv_draw_confirm(GContext *ctx, GPoint center, int32_t elapsed) {
     case IconSent:
       if (s_sent_sequence) {
         int32_t last = (int32_t)gdraw_command_sequence_get_total_duration(s_sent_sequence) - 1;
+#if defined(SCREENSHOT_MODE)
+        if (s_freeze_percent >= 0) t = last * s_freeze_percent / 100;
+#endif
         GDrawCommandFrame *frame = gdraw_command_sequence_get_frame_by_elapsed(s_sent_sequence, t < last ? t : last);
         if (frame) gdraw_command_frame_draw(ctx, s_sent_sequence, frame, GPoint(center.x - ICON_HALF, center.y - ICON_HALF));
       }
@@ -306,7 +318,12 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
 
   int32_t elapsed = prv_elapsed_ms();
-  GPoint center = GPoint(bounds.size.w / 2, bounds.size.h * 38 / 100);
+  // The icon rests just above the message.
+  int center_y = bounds.size.h * MESSAGE_Y_PERCENT / 100 - ICON_HALF - 2;
+  // On a round screen keep clear of the curved top edge.
+  int min_center_y = ICON_HALF + PBL_IF_ROUND_ELSE(10, 0);
+  if (center_y < min_center_y) center_y = min_center_y;
+  GPoint center = GPoint(bounds.size.w / 2, center_y);
   switch (s_state) {
     case StateIdle:
       if (s_setup_needed) {
@@ -384,6 +401,9 @@ static void prv_free_confirm(void) {
 static void prv_pick_confirm(bool voice_note) {
   prv_free_confirm();
   Icon next = IconSent;
+#if defined(SCREENSHOT_MODE)
+  if (s_forced_icon >= 0) { voice_note = true; next = (Icon)s_forced_icon; }
+#endif
   if (!voice_note) {
     next = (Icon)(rand() % IconSent);
     if (next == s_confirm) next = (Icon)((next + 1) % IconSent);
@@ -407,6 +427,11 @@ static void prv_pick_confirm(bool voice_note) {
 
 static void prv_set_message(const char *text) {
   snprintf(s_message, sizeof(s_message), "%s", text);
+  // One line gets the large font; a message that needs two lines gets the smaller one so it still fits.
+  GFont large = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+  GSize size = graphics_text_layout_get_content_size(s_message, large, layer_get_bounds(text_layer_get_layer(s_message_layer)),
+                                                     GTextOverflowModeWordWrap, GTextAlignmentCenter);
+  text_layer_set_font(s_message_layer, size.h > 36 ? fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD) : large);
   text_layer_set_text(s_message_layer, s_message);
   layer_set_hidden(text_layer_get_layer(s_message_layer), s_state == StateIdle || s_state == StateStarting);
 }
@@ -464,6 +489,9 @@ static void prv_show(State state, const char *text) {
     prv_restart_clock();
     s_frame_timer = app_timer_register(FRAME_MS, prv_frame, NULL);
     int show_ms = s_anim_ms + 700;
+#if defined(SCREENSHOT_MODE)
+    show_ms = 50000;
+#endif
     s_reset_timer = app_timer_register(show_ms > MIN_RESULT_SHOW_MS ? show_ms : MIN_RESULT_SHOW_MS, prv_reset, NULL);
   } else if (state == StateSending) {
     prv_restart_clock();
@@ -518,6 +546,20 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   Tuple *result = dict_find(iter, MESSAGE_KEY_RESULT);
   Tuple *message = dict_find(iter, MESSAGE_KEY_MESSAGE);
   if (!result) return;
+#if defined(SCREENSHOT_MODE)
+  if (result->value->int32 >= 100) {
+    s_forced_icon = IconSent;
+    s_freeze_percent = result->value->int32 - 100;
+    prv_show(StateOk, message ? message->value->cstring : "");
+    return;
+  }
+  if (result->value->int32 >= 10) {
+    s_forced_icon = result->value->int32 - 10;
+    s_freeze_percent = -1;
+    prv_show(StateOk, message ? message->value->cstring : "");
+    return;
+  }
+#endif
   prv_show(result->value->int32 == RESULT_OK ? StateOk : StateFail, message ? message->value->cstring : "");
 }
 
@@ -608,8 +650,9 @@ static void prv_window_load(Window *window) {
   layer_set_update_proc(s_canvas, prv_canvas_update);
   layer_add_child(root, s_canvas);
 
-  int message_y = bounds.size.h * 69 / 100;
-  s_message_layer = text_layer_create(GRect(10, message_y, bounds.size.w - 20, bounds.size.h - message_y - 6));
+  int message_y = bounds.size.h * MESSAGE_Y_PERCENT / 100;
+  int inset = PBL_IF_ROUND_ELSE(bounds.size.w / 7, 10);
+  s_message_layer = text_layer_create(GRect(inset, message_y, bounds.size.w - 2 * inset, bounds.size.h - message_y - 6));
   text_layer_set_font(s_message_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(s_message_layer, GTextAlignmentCenter);
   text_layer_set_text_color(s_message_layer, GColorBlack);

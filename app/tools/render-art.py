@@ -20,14 +20,14 @@ def render(svg, width, height):
     return Image.open(io.BytesIO(bytes(data))).convert('RGBA')
 
 
-# ---- app icon: menu icon (25px), store icons, and a preview
+# ---- app icon: menu icon (25px) and the store's small (80px) and large (144px) icons
 icon_svg = open(os.path.join(ART, 'app-icon.svg')).read()
 # The 25px menu icon needs bolder strokes and a simpler grille to stay legible.
 small = icon_svg.replace('stroke-width="4"', 'stroke-width="5"')
 small = re.sub(r'\s*<line[^>]*y1="(14|28)"[^>]*/>', '', small)
 render(small, 25, 25).save(os.path.join(IMAGES, 'menu_icon.png'))
 render(icon_svg, 144, 144).save(os.path.join(STORE, 'icon-144.png'))
-render(icon_svg, 48, 48).save(os.path.join(STORE, 'icon-48.png'))
+render(icon_svg, 80, 80).save(os.path.join(STORE, 'icon-80.png'))   # the store's small icon
 
 # (The main-screen microphone is drawn in code on the watch, so it can move and turn.)
 
