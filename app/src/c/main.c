@@ -187,13 +187,15 @@ static int32_t prv_swing(int32_t elapsed, int swings, int max_degrees, int decay
   return sin_lookup(angle) * DEG_TO_TRIGANGLE(max_degrees) / TRIG_MAX_RATIO * amplitude / 100;
 }
 
-// Vertical offset of a drop-and-bounce: starts above its place, hits it and bounces smaller each time.
-static int prv_bounce_offset(int32_t elapsed, int height) {
+// Horizontal offset of a spring: starts `distance` to the left, crosses the middle, overshoots a little and
+// settles. The overshoot is halved so the icon stays on the screen once it has arrived.
+static int prv_slide_offset(int32_t elapsed, int distance) {
   if (elapsed >= s_anim_ms) return 0;
-  int32_t angle = TRIG_MAX_ANGLE * 5 * elapsed / (4 * s_anim_ms);
-  int32_t cosine = cos_lookup(angle);
-  if (cosine < 0) cosine = -cosine;
-  return -(int)((int32_t)height * cosine / TRIG_MAX_RATIO * (s_anim_ms - elapsed) / s_anim_ms);
+  int32_t cosine = cos_lookup(TRIG_MAX_ANGLE * elapsed / s_anim_ms);
+  int32_t left = s_anim_ms - elapsed;
+  int32_t decay = left * left / s_anim_ms * left / s_anim_ms;   // (1 - t)^3, in the same units as s_anim_ms
+  int offset = -(int)((int32_t)distance * cosine / TRIG_MAX_RATIO * decay / s_anim_ms);
+  return cosine < 0 ? offset / 2 : offset;
 }
 
 #if defined(PBL_ROUND)
@@ -280,10 +282,17 @@ static void prv_draw_confirm(GContext *ctx, GPoint center, int32_t elapsed) {
       prv_draw_icon(ctx, at, 0);
       break;
     }
-    case IconThumbsUp:
-      // Drops in, bounces, and wobbles as it settles.
-      prv_draw_icon(ctx, GPoint(center.x, center.y + prv_bounce_offset(t, ICON_SIZE * 3 / 4)), prv_swing(t, 3, 22, 100));
+    case IconThumbsUp: {
+      // Slides in from the left like a spring, then wobbles as it settles. A rotated bitmap is only drawn once it
+      // is wholly on the screen, so it never has to be clipped at an edge while turning.
+      int screen_w = center.x * 2;
+      GPoint at = GPoint(center.x + prv_slide_offset(t, center.x + ICON_HALF), center.y);
+      int32_t ramp = t < s_anim_ms * 4 / 10 ? t * 10 / (s_anim_ms * 4) : 10;   // the wobble builds up over 40%, in tenths
+      int32_t wobble = prv_swing(t, 3, 22, 100) * ramp / 10;
+      bool on_screen = at.x - ICON_HALF >= 0 && at.x + ICON_HALF <= screen_w;
+      prv_draw_icon(ctx, at, on_screen ? wobble : 0);
       break;
+    }
     case IconMusic:
       // Rocking side to side to the beat, hopping on each swing.
       prv_draw_icon(ctx, GPoint(center.x, center.y - abs(prv_swing(t, 5, 10, 50)) / 400), prv_swing(t, 5, 14, 50));

@@ -7,6 +7,6 @@
     <line fill="none" x1="26" y1="21" x2="54" y2="21"/>
     <line fill="none" x1="26" y1="28" x2="54" y2="28"/>
     <path fill="none" d="M40 36 V56 A14 14 0 0 1 12 56 V43"/>
-    <path fill="none" d="M12 50 L6 44"/>
+    <path fill="none" d="M12 43 L19 50"/>
   </g>
 </svg>
