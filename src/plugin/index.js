@@ -9,6 +9,7 @@ var MAX_DESTINATIONS = 10;
 var SLOTS = ['up_single', 'up_double', 'up_hold', 'down_single', 'down_double', 'down_hold'];
 var MAX_TEXT = 8000;
 var FORBIDDEN_HEADERS = ['host', 'content-length', 'connection', 'transfer-encoding', 'cookie'];
+var RESERVED_FIELDS = ['timestamp', 'source'];
 
 function stringValue(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -25,10 +26,12 @@ function parseUrl(value) {
   return { url: url, host: host, https: match[1].toLowerCase() === 'https' };
 }
 
-function cleanHeaders(raw, previous) {
+// A header list from the page. `previous` is the list saved before, so a blank value can mean "keep the
+// saved one", unless `hostChanged`: those values were saved for another host and must not follow the URL.
+function cleanHeaders(raw, previous, hostChanged) {
   var list = Array.isArray(raw) ? raw : [];
   if (list.length > MAX_HEADERS) return { error: 'At most ' + MAX_HEADERS + ' headers.' };
-  var seen = {};
+  var seen = Object.create(null);
   var out = [];
   for (var i = 0; i < list.length; i++) {
     var name = stringValue(list[i] && list[i].name);
@@ -39,9 +42,11 @@ function cleanHeaders(raw, previous) {
     if (seen[lower]) return { error: 'Header "' + name + '" appears twice.', index: i, part: 'name' };
     seen[lower] = true;
     var value = typeof list[i].value === 'string' ? list[i].value : '';
-    // A blank value on a header that already had one means "keep the saved value".
     if (!value && previous) {
       var kept = previous.filter(function (header) { return header.name.toLowerCase() === lower; })[0];
+      if (kept && kept.value && hostChanged) {
+        return { error: 'Enter the value of ' + name + ' again. The host changed, so the saved value isn\'t sent to the new one.', index: i, part: 'value' };
+      }
       if (kept) value = kept.value;
     }
     if (/[\r\n]/.test(value) || value.length > 2000) return { error: 'The value of ' + name + ' is not valid.', index: i, part: 'value' };
@@ -58,11 +63,14 @@ function cleanDestination(raw, previous) {
   var at = function (field, extra) { return Object.assign({ kind: 'destination', id: id, field: field }, extra); };
   var parsed = parseUrl(raw.url);
   if (parsed.error) return { error: name + ': ' + parsed.error, target: at('url') };
-  var headers = cleanHeaders(raw.headers, previous && previous.headers);
+  var hostChanged = !!previous && previous.host !== parsed.host;
+  var headers = cleanHeaders(raw.headers, previous && previous.headers, hostChanged);
   if (headers.error) return { error: name + ': ' + headers.error, target: at('headers', { index: headers.index, part: headers.part }) };
   var format = raw.format === 'text' ? 'text' : 'json';
   var field = stringValue(raw.field) || 'text';
   if (!/^[A-Za-z0-9_.-]{1,40}$/.test(field)) return { error: name + ': the JSON field name can only use letters, digits, _ . and -.', target: at('field') };
+  // timestamp and source are added to every JSON message, so a note can't use those names.
+  if (format === 'json' && RESERVED_FIELDS.indexOf(field) !== -1) return { error: name + ': "' + field + '" is added to every message already. Pick another field name.', target: at('field') };
   return { destination: { id: id, name: name, url: parsed.url, host: parsed.host, https: parsed.https, headers: headers.headers, format: format, field: field } };
 }
 
@@ -70,22 +78,27 @@ function findDestination(config, id) {
   return config.destinations.filter(function (destination) { return destination.id === id; })[0] || null;
 }
 
-// The whole settings object from the page: { destinations, noteDestination, commands }.
+// The whole settings object from the page: { destinations, noteDestination, commands, labels }.
+// Returns { config } or { error, target }. A reference to a webhook that doesn't exist is an error, not repaired.
 function cleanConfig(message, previous) {
   var list = Array.isArray(message.destinations) ? message.destinations : [];
   if (list.length > MAX_DESTINATIONS) return { error: 'At most ' + MAX_DESTINATIONS + ' destinations.' };
   var destinations = [];
-  var seen = {};
+  var byId = Object.create(null);
   for (var i = 0; i < list.length; i++) {
-    var before = previous && findDestination(previous, stringValue(list[i] && list[i].id));
-    var cleaned = cleanDestination(list[i], before);
+    var oldDestination = previous && findDestination(previous, stringValue(list[i] && list[i].id));
+    var cleaned = cleanDestination(list[i], oldDestination);
     if (cleaned.error) return { error: cleaned.error, target: cleaned.target };
-    if (seen[cleaned.destination.id]) return { error: 'A destination appears twice.' };
-    seen[cleaned.destination.id] = true;
+    if (byId[cleaned.destination.id]) return { error: 'A destination appears twice.' };
+    byId[cleaned.destination.id] = cleaned.destination;
     destinations.push(cleaned.destination);
   }
   var fallback = destinations.length ? destinations[0].id : '';
-  var noteDestination = seen[message.noteDestination] ? message.noteDestination : fallback;
+  var noteDestination = fallback;
+  if (message.noteDestination) {
+    if (!byId[message.noteDestination]) return { error: 'Choose a webhook that exists for voice notes.', target: { kind: 'note', field: 'destination' } };
+    noteDestination = message.noteDestination;
+  }
   var commands = {};
   var rawCommands = message.commands && typeof message.commands === 'object' ? message.commands : {};
   for (var j = 0; j < SLOTS.length; j++) {
@@ -93,11 +106,18 @@ function cleanConfig(message, previous) {
     var command = stringValue(raw && raw.command);
     if (!command) continue;
     var slotName = SLOTS[j].replace('_', ' ');
-    if (command.length > 100 || /[\u0000-\u001f]/.test(command)) return { error: 'Button ' + slotName + ': the command is too long or has invalid characters.', target: { kind: 'command', slot: SLOTS[j], field: 'command' } };
-    var before = previous && previous.commands && previous.commands[SLOTS[j]];
-    var extra = cleanHeaders(raw.headers, before && before.headers);
-    if (extra.error) return { error: 'Button ' + slotName + ': ' + extra.error, target: { kind: 'command', slot: SLOTS[j], field: 'headers', index: extra.index, part: extra.part } };
-    commands[SLOTS[j]] = { command: command, destination: seen[raw.destination] ? raw.destination : fallback, headers: extra.headers };
+    var at = function (field, extra) { return Object.assign({ kind: 'command', slot: SLOTS[j], field: field }, extra); };
+    if (command.length > 100 || /[\u0000-\u001f]/.test(command)) return { error: 'Button ' + slotName + ': the command is too long or has invalid characters.', target: at('command') };
+    var destinationId = raw.destination || fallback;
+    var destination = byId[destinationId];
+    if (!destination) return { error: 'Button ' + slotName + ': choose a webhook that exists.', target: at('destination') };
+    // Saved extra header values belong to the webhook they were saved for.
+    var oldCommand = previous && previous.commands && previous.commands[SLOTS[j]];
+    var oldHost = oldCommand && previous && findDestination(previous, oldCommand.destination);
+    var hostChanged = !!oldCommand && (!oldHost || oldHost.host !== destination.host);
+    var extra = cleanHeaders(raw.headers, oldCommand && oldCommand.headers, hostChanged);
+    if (extra.error) return { error: 'Button ' + slotName + ': ' + extra.error, target: at('headers', { index: extra.index, part: extra.part }) };
+    commands[SLOTS[j]] = { command: command, destination: destinationId, headers: extra.headers };
   }
   var rawLabels = message.labels && typeof message.labels === 'object' ? message.labels : {};
   var labels = { up: stringValue(rawLabels.up), down: stringValue(rawLabels.down) };
@@ -200,7 +220,7 @@ async function insertPin(config) {
     layout: {
       type: 'genericPin',
       title: 'Send note',
-      subtitle: config ? 'to ' + findDestination(config, config.noteDestination).host : 'Webhook',
+      subtitle: config && findDestination(config, config.noteDestination) ? 'to ' + findDestination(config, config.noteDestination).host : 'Webhook',
       tinyIcon: 'system://images/NOTIFICATION_FLAG',
     },
     actions: [{ title: 'Send note', type: 'pluginAction', action: 'send_message', inputArg: 'text' }],
