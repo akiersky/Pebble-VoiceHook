@@ -9,12 +9,21 @@ var Contract = {
   TARGETS: { DESTINATION: 'destination', COMMAND: 'command', NOTE: 'note', LABEL: 'label' },
   FIELDS: { URL: 'url', HEADERS: 'headers', JSON_FIELD: 'field', COMMAND: 'command', DESTINATION: 'destination', UP: 'up', DOWN: 'down' },
   PARTS: { NAME: 'name', VALUE: 'value' },
+  SLOTS: [
+    { id: 'up_single', button: 'up', gesture: 'press', wire: 1 },
+    { id: 'up_double', button: 'up', gesture: 'double press', wire: 2 },
+    { id: 'up_hold', button: 'up', gesture: 'hold', wire: 3 },
+    { id: 'down_single', button: 'down', gesture: 'press', wire: 4 },
+    { id: 'down_double', button: 'down', gesture: 'double press', wire: 5 },
+    { id: 'down_hold', button: 'down', gesture: 'hold', wire: 6 },
+  ],
+  WIRE: { KEYS: ['TEXT', 'SLOT', 'RESULT', 'MESSAGE', 'UP_LABEL', 'DOWN_LABEL'], RESULT_OK: 1, RESULT_FAIL: 0, MESSAGE_MAX: 90 },
 };
 // ---- end shared contract ----
 
 var CONFIG_KEY = 'webhook.config.v2';
 var LEGACY_KEY = 'webhook.config.v1';
-var SLOTS = ['up_single', 'up_double', 'up_hold', 'down_single', 'down_double', 'down_hold'];
+var SLOTS = Contract.SLOTS.map(function (slot) { return slot.id; });
 var FORBIDDEN_HEADERS = ['host', 'content-length', 'connection', 'transfer-encoding', 'cookie'];
 var RESERVED_FIELDS = ['timestamp', 'source'];
 

@@ -3,6 +3,7 @@
 // Launched from a Quick Launch button, it starts dictating at once and closes after the confirmation.
 // The app closes by itself after a minute with nothing happening.
 #include <pebble.h>
+#include "contract.h"
 
 #define DICTATION_BUFFER 512
 #define REPLY_TIMEOUT_MS 20000
@@ -12,7 +13,6 @@
 #define ICON_ANIMATION_MS 1100
 #define MIN_RESULT_SHOW_MS 1800
 #define FRAME_MS 33
-#define LABEL_MAX 25
 #define ICON_COUNT 5
 
 // Confirmation icons are drawn at about 70% of the screen width; the images are made at these sizes.
@@ -51,7 +51,7 @@ static bool s_dictating = false;
 static bool s_sending_voice = false;
 static time_t s_anim_start_s;
 static uint16_t s_anim_start_ms;
-static char s_message[96];
+static char s_message[WIRE_MESSAGE_MAX + 1];
 static char s_up_label[LABEL_MAX];
 static char s_down_label[LABEL_MAX];
 
@@ -463,7 +463,7 @@ static void prv_timed_out(void *data) {
   prv_show(StateFail, "No reply from the phone");
 }
 
-// Sends either dictated text (text != NULL) or a button slot (1 to 6).
+// Sends either dictated text (text != NULL) or a button slot (one of the SLOT_ numbers).
 static void prv_send(const char *text, int slot) {
   DictionaryIterator *iter;
   s_sending_voice = text != NULL;
@@ -499,7 +499,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   Tuple *result = dict_find(iter, MESSAGE_KEY_RESULT);
   Tuple *message = dict_find(iter, MESSAGE_KEY_MESSAGE);
   if (!result) return;
-  prv_show(result->value->int32 == 1 ? StateOk : StateFail, message ? message->value->cstring : "");
+  prv_show(result->value->int32 == RESULT_OK ? StateOk : StateFail, message ? message->value->cstring : "");
 }
 
 static void prv_outbox_failed(DictionaryIterator *iter, AppMessageResult reason, void *context) {
@@ -557,13 +557,13 @@ static void prv_command(int slot) {
 }
 
 static void prv_up_multi(ClickRecognizerRef recognizer, void *context) {
-  prv_command(click_number_of_clicks_counted(recognizer) >= 2 ? 2 : 1);
+  prv_command(click_number_of_clicks_counted(recognizer) >= 2 ? SLOT_UP_DOUBLE : SLOT_UP_SINGLE);
 }
 static void prv_down_multi(ClickRecognizerRef recognizer, void *context) {
-  prv_command(click_number_of_clicks_counted(recognizer) >= 2 ? 5 : 4);
+  prv_command(click_number_of_clicks_counted(recognizer) >= 2 ? SLOT_DOWN_DOUBLE : SLOT_DOWN_SINGLE);
 }
-static void prv_up_hold(ClickRecognizerRef recognizer, void *context) { prv_command(3); }
-static void prv_down_hold(ClickRecognizerRef recognizer, void *context) { prv_command(6); }
+static void prv_up_hold(ClickRecognizerRef recognizer, void *context) { prv_command(SLOT_UP_HOLD); }
+static void prv_down_hold(ClickRecognizerRef recognizer, void *context) { prv_command(SLOT_DOWN_HOLD); }
 
 static void prv_click_config(void *context) {
   window_single_click_subscribe(BUTTON_ID_SELECT, prv_select);
@@ -605,7 +605,7 @@ static void prv_init(void) {
 
   app_message_register_inbox_received(prv_inbox_received);
   app_message_register_outbox_failed(prv_outbox_failed);
-  app_message_open(256, DICTATION_BUFFER + 64);
+  app_message_open(dict_calc_buffer_size(4, sizeof(int32_t), WIRE_MESSAGE_MAX + 1, LABEL_MAX, LABEL_MAX), DICTATION_BUFFER + 64);
 
   s_dictation = dictation_session_create(DICTATION_BUFFER, prv_dictation, NULL);
   dictation_session_enable_confirmation(s_dictation, true);

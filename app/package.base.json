@@ -1,7 +1,7 @@
 {
   "name": "webhook-app",
   "author": "kiersky",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "keywords": [
     "pebble-app"
   ],
@@ -23,14 +23,6 @@
     "watchapp": {
       "watchface": false
     },
-    "messageKeys": [
-      "TEXT",
-      "SLOT",
-      "RESULT",
-      "MESSAGE",
-      "UP_LABEL",
-      "DOWN_LABEL"
-    ],
     "resources": {
       "media": [
         {

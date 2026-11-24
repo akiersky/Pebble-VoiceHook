@@ -136,13 +136,20 @@ var Contract = {
   TARGETS: { DESTINATION: 'destination', COMMAND: 'command', NOTE: 'note', LABEL: 'label' },
   FIELDS: { URL: 'url', HEADERS: 'headers', JSON_FIELD: 'field', COMMAND: 'command', DESTINATION: 'destination', UP: 'up', DOWN: 'down' },
   PARTS: { NAME: 'name', VALUE: 'value' },
+  SLOTS: [
+    { id: 'up_single', button: 'up', gesture: 'press', wire: 1 },
+    { id: 'up_double', button: 'up', gesture: 'double press', wire: 2 },
+    { id: 'up_hold', button: 'up', gesture: 'hold', wire: 3 },
+    { id: 'down_single', button: 'down', gesture: 'press', wire: 4 },
+    { id: 'down_double', button: 'down', gesture: 'double press', wire: 5 },
+    { id: 'down_hold', button: 'down', gesture: 'hold', wire: 6 },
+  ],
+  WIRE: { KEYS: ['TEXT', 'SLOT', 'RESULT', 'MESSAGE', 'UP_LABEL', 'DOWN_LABEL'], RESULT_OK: 1, RESULT_FAIL: 0, MESSAGE_MAX: 90 },
 };
 // ---- end shared contract ----
 
-    var SLOTS = [
-      ['up_single', 'Press'], ['up_double', 'Double press'], ['up_hold', 'Hold'],
-      ['down_single', 'Press'], ['down_double', 'Double press'], ['down_hold', 'Hold']
-    ];
+    function slotTitle(slot) { return slot.gesture.charAt(0).toUpperCase() + slot.gesture.slice(1); }
+
     var destinationsBox = document.getElementById('destinations');
     var noteSelect = document.getElementById('noteDestination');
     var commandsUp = document.getElementById('commandsUp');
@@ -344,8 +351,8 @@ var Contract = {
     function buildCommands(commands) {
       commandsUp.replaceChildren();
       commandsDown.replaceChildren();
-      SLOTS.forEach(function (slot) {
-        var entry = commands[slot[0]] || {};
+      Contract.SLOTS.forEach(function (slot) {
+        var entry = commands[slot.id] || {};
         var input = el('input', { type: 'text', autocomplete: 'off', autocapitalize: 'none', spellcheck: false, placeholder: 'e.g. lights_off', value: entry.command || '' });
         var select = el('select', {});
         var headers = el('div', {});
@@ -359,12 +366,12 @@ var Contract = {
         ]);
         more.open = (entry.headers || []).length > 0;
         var row = el('div', { className: 'command' }, [
-          el('h3', { textContent: slot[1] }),
+          el('h3', { textContent: slotTitle(slot) }),
           linkLabel(el('label', { textContent: 'Command' }), input), input,
           linkLabel(el('label', { textContent: 'Webhook' }), select), select, more
         ]);
-        row.slot = slot[0]; row.input = input; row.destination = select; row.headers = headers; row.more = more;
-        (slot[0].indexOf('up_') === 0 ? commandsUp : commandsDown).appendChild(row);
+        row.slot = slot.id; row.input = input; row.destination = select; row.headers = headers; row.more = more;
+        (slot.button === 'up' ? commandsUp : commandsDown).appendChild(row);
         fillSelect(select, entry.destination);
       });
     }

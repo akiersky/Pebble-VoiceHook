@@ -12,5 +12,6 @@ const base = require("./package.base.json");
 const root = require("../package.json");
 base.pebble.plugin = root.pebble.plugin;
 base.pebble.configPage = root.pebble.configPage;
+base.pebble.messageKeys = require("../src/contract.js").WIRE.KEYS;
 require("fs").writeFileSync("package.json", JSON.stringify(base, null, 2) + "\n");
 '
