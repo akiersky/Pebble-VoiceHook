@@ -22,7 +22,8 @@
 // Taller than one line of GOTHIC_24_BOLD means the message wrapped.
 #define MESSAGE_LARGE_MAX_H 36
 // The message sits under the icon; on a round screen it starts higher, where the circle is still wide.
-#define MESSAGE_Y_PERCENT PBL_IF_ROUND_ELSE(62, 69)
+#define ICON_MESSAGE_GAP 2
+#define MESSAGE_LINE_H 28   // one line of the large message font
 
 enum { PersistUpLabel = 1, PersistDownLabel = 2 };
 
@@ -173,6 +174,11 @@ static MicPose prv_mic_in_flight(GRect bounds, int32_t elapsed) {
   };
 }
 
+// The icon and the one-line message under it are centred on the screen as a pair.
+static int prv_icon_top(GRect bounds) {
+  return (bounds.size.h - (ICON_SIZE + ICON_MESSAGE_GAP + MESSAGE_LINE_H)) / 2;
+}
+
 static GColor prv_confirm_background(Icon icon) {
   switch (icon) {
     case IconRocket: return PBL_IF_COLOR_ELSE(GColorPictonBlue, GColorWhite);
@@ -293,10 +299,7 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
 
   int32_t elapsed = prv_elapsed_ms();
   // The icon rests just above the message.
-  int center_y = bounds.size.h * MESSAGE_Y_PERCENT / 100 - ICON_HALF - 2;
-  // On a round screen keep clear of the curved top edge.
-  int min_center_y = ICON_HALF + PBL_IF_ROUND_ELSE(10, 0);
-  if (center_y < min_center_y) center_y = min_center_y;
+  int center_y = prv_icon_top(bounds) + ICON_HALF;
   GPoint center = GPoint(bounds.size.w / 2, center_y);
   switch (s_state) {
     case StateIdle:
@@ -617,7 +620,7 @@ static void prv_window_load(Window *window) {
   layer_set_update_proc(s_canvas, prv_canvas_update);
   layer_add_child(root, s_canvas);
 
-  int message_y = bounds.size.h * MESSAGE_Y_PERCENT / 100;
+  int message_y = prv_icon_top(bounds) + ICON_SIZE + ICON_MESSAGE_GAP;
   int inset = PBL_IF_ROUND_ELSE(bounds.size.w / 7, 10);
   s_message_layer = text_layer_create(GRect(inset, message_y, bounds.size.w - 2 * inset, bounds.size.h - message_y - 6));
   text_layer_set_font(s_message_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
