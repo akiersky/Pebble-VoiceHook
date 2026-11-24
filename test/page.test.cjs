@@ -304,3 +304,25 @@ test('small controls are at least 44px tall', () => {
   const html = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'config.html'), 'utf8');
   assert.match(html, /\.command details > summary \{[^}]*min-height: 44px/);
 });
+
+test('page accessibility basics: language, a live status region, labelled header group', async () => {
+  const t = await start();
+  assert.strictEqual(t.document.documentElement.getAttribute('lang'), 'en');
+  const status = t.document.querySelector('#status');
+  assert.strictEqual(status.getAttribute('role'), 'status');
+  assert.ok(!status.classList.contains('show'), 'present in the page but not displayed until it has a message');
+  const group = t.document.querySelector('#destinations [role=group]');
+  assert.ok(t.document.getElementById(group.getAttribute('aria-labelledby')).textContent === 'Headers');
+});
+
+test('choosing + New webhook adds a card; moving on without typing removes it again', async () => {
+  const t = await start();
+  const select = t.document.querySelector('#noteDestination');
+  const before = t.document.querySelectorAll('#destinations > details').length;
+  select.value = '__new__';
+  select.dispatchEvent(new t.window.Event('change', { bubbles: true }));
+  assert.strictEqual(t.document.querySelectorAll('#destinations > details').length, before + 1);
+  select.value = select.options[0].value;
+  select.dispatchEvent(new t.window.Event('change', { bubbles: true }));
+  assert.strictEqual(t.document.querySelectorAll('#destinations > details').length, before);
+});

@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,51 +7,52 @@
   <style>
     :root {
       color-scheme: light dark;
-      --bg: #f4f5f8; --card: #ffffff; --text: #1b1d24; --muted: #6b7080; --line: #dde0e8;
-      --accent: #4772fa; --accent-text: #ffffff; --soft: rgba(71,114,250,.12);
+      --bg: #f4f5f8; --card: #ffffff; --text: #1b1d24; --muted: #6b7080; --line: #dde0e8; --field-line: #868ca0;
+      --accent: #3558d8; --accent-ink: #3558d8; --confirm-text: #ffffff; --accent-text: #ffffff; --soft: rgba(53,88,216,.12);
       --danger: #b42318; --danger-soft: rgba(180,35,24,.16); --ok-bg: #e3f5e8; --ok-text: #14532d; --err-bg: #fde4e4; --err-text: #7f1d1d; --warn-bg: #fdecc8; --warn-text: #5c3d00;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #101218; --card: #1a1d26; --text: #eceef4; --muted: #9aa0b3; --line: #2c3040;
-        --accent: #668dff; --accent-text: #0b1020; --soft: rgba(102,141,255,.16);
+        --bg: #101218; --card: #1a1d26; --text: #eceef4; --muted: #9aa0b3; --line: #2c3040; --field-line: #6b7288;
+        --accent: #668dff; --accent-ink: #8fadff; --confirm-text: #1b0a08; --accent-text: #0b1020; --soft: rgba(102,141,255,.16);
         --danger: #ff8a80; --danger-soft: rgba(255,138,128,.2); --ok-bg: #12301d; --ok-text: #b7ebc6; --err-bg: #3a1717; --err-text: #ffc9c9; --warn-bg: #3a2c0c; --warn-text: #fbd98a;
       }
     }
     * { box-sizing: border-box; }
-    body { font: 16px/1.45 -apple-system, system-ui, Roboto, sans-serif; margin: 0; padding: 16px 16px 40px; background: var(--bg); color: var(--text); }
+    html { scroll-padding-top: 72px; scroll-padding-bottom: 96px; }
+    body { font: 1rem/1.45 -apple-system, system-ui, Roboto, sans-serif; margin: 0; padding: 16px 16px 40px; background: var(--bg); color: var(--text); }
     main { max-width: 560px; margin: 0 auto; }
     header { display: flex; align-items: center; gap: 12px; margin: 4px 0 16px; }
-    .logo { width: 44px; height: 44px; border-radius: 12px; background: var(--accent); color: var(--accent-text); display: grid; place-items: center; font-size: 22px; font-weight: 700; flex: none; }
-    h1 { font-size: 22px; margin: 0; line-height: 1.2; }
-    header p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+    .logo { width: 44px; height: 44px; border-radius: 12px; background: var(--accent); color: var(--accent-text); display: grid; place-items: center; font-size: 1.375rem; font-weight: 700; flex: none; }
+    h1 { font-size: 1.375rem; margin: 0; line-height: 1.2; }
+    header p { margin: 2px 0 0; color: var(--muted); font-size: 0.875rem; }
 
-    #status { display: none; position: sticky; top: 8px; z-index: 5; margin: 0 0 12px; padding: 11px 14px; border-radius: 12px; font-size: 14px; line-height: 1.4; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(0,0,0,.12); }
-    #status.show { display: block; }
+    #status { display: block; position: sticky; top: 8px; z-index: 5; margin: 0 0 12px; padding: 11px 14px; border-radius: 12px; font-size: 0.875rem; line-height: 1.4; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+    #status:not(.show) { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); box-shadow: none; }
     #status.ok { background: var(--ok-bg); color: var(--ok-text); border-color: transparent; }
     #status.error { background: var(--err-bg); color: var(--err-text); border-color: transparent; }
-    #warning { margin: 0 0 12px; padding: 11px 14px; border-radius: 12px; background: var(--warn-bg); color: var(--warn-text); font-size: 14px; }
+    #warning { margin: 0 0 12px; padding: 11px 14px; border-radius: 12px; background: var(--warn-bg); color: var(--warn-text); font-size: 0.875rem; }
 
     section { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
-    h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
-    label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
-    label:first-of-type { margin-top: 0; }
+    h2 { font-size: 0.8125rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+    label, .group-label { display: block; font-size: 0.875rem; font-weight: 600; margin: 14px 0 6px; }
+    label:first-of-type, .group-label:first-child { margin-top: 0; }
     input, select {
-      width: 100%; padding: 12px; font-size: 16px; border: 1px solid var(--line); border-radius: 10px;
+      width: 100%; padding: 12px; font-size: 1rem; border: 1px solid var(--field-line); border-radius: 10px;
       background: var(--bg); color: inherit; outline: none;
     }
     input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--soft); }
     input.invalid, select.invalid { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
-    .field-error { color: var(--danger); font-size: 13px; font-weight: 600; margin: 4px 0 8px; }
+    .field-error { color: var(--danger); font-size: 0.8125rem; font-weight: 600; margin: 4px 0 8px; }
     .field-error::before { content: "\26A0\FE0E  "; }
-    .hint { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
-    code { background: var(--soft); padding: 1px 5px; border-radius: 5px; font-size: 12.5px; }
+    .hint { color: var(--muted); font-size: 0.8125rem; margin: 6px 0 0; }
+    code { background: var(--soft); padding: 1px 5px; border-radius: 5px; font-size: 0.7812rem; }
 
     .header-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 8px; }
-    .header-row .remove { width: 44px; padding: 0; font-size: 20px; line-height: 1; }
+    .header-row .remove { width: 44px; padding: 0; font-size: 1.25rem; line-height: 1; }
 
-    button { font: inherit; font-size: 15px; font-weight: 600; padding: 12px 16px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-text); }
-    button.secondary { background: var(--soft); color: var(--accent); }
+    button { font: inherit; font-size: 0.9375rem; font-weight: 600; padding: 12px 16px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-text); }
+    button.secondary { background: var(--soft); color: var(--accent-ink); }
     button.danger { background: transparent; color: var(--err-text); }
     @media (prefers-color-scheme: light) { button.danger { color: #b42318; } }
     button:active { filter: brightness(.92); }
@@ -68,16 +69,16 @@
     .command { padding: 0; margin-top: 10px; }
     .command > summary { padding: 12px 14px; }
     .command-body { padding: 0 14px 14px; }
-    .command label { font-size: 13px; margin: 10px 0 4px; }
+    .command label { font-size: 0.8125rem; margin: 10px 0 4px; }
     .command-body > label:first-child { margin-top: 0; }
     .command input, .command select { padding: 10px 12px; background: var(--card); }
     .command details { border: 0; background: transparent; margin: 10px 0 0; }
-    .command details > summary { padding: 12px 0; min-height: 44px; align-items: center; font-weight: 500; color: var(--muted); font-size: 13px; }
-    h3.group { font-size: 15px; margin: 18px 0 8px; }
+    .command details > summary { padding: 12px 0; min-height: 44px; align-items: center; font-weight: 500; color: var(--muted); font-size: 0.8125rem; }
+    h3.group { font-size: 0.9375rem; margin: 18px 0 8px; }
     h3.group:first-of-type { margin-top: 4px; }
-    button[data-confirming] { background: var(--danger); color: #ffffff; }
+    button[data-confirming] { background: var(--danger); color: var(--confirm-text); }
     .savebar { position: sticky; bottom: 0; z-index: 4; display: flex; align-items: center; gap: 12px; margin: 16px -16px -40px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); }
-    .savebar #dirty { flex: 1; font-size: 14px; font-weight: 600; color: var(--muted); }
+    .savebar #dirty { flex: 1; font-size: 0.875rem; font-weight: 600; color: var(--muted); }
     .savebar #dirty.show { color: var(--danger); }
     .savebar #dirty.show::before { content: "\25CF  "; }
     .savebar button { flex: none; min-width: 112px; }
@@ -94,6 +95,7 @@
       </div>
     </header>
 
+    <p id="savedValueNote" hidden>A value is saved on this phone. Leave this blank to keep it.</p>
     <p id="warning" role="alert" hidden></p>
     <div id="status" role="status" aria-live="polite"></div>
 
@@ -258,6 +260,21 @@ var Contract = {
       return node;
     }
 
+    // Smooth scrolling unless the person asked for less motion.
+    function scrollTo(node) {
+      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      node.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+    }
+
+    // Disabling buttons or rebuilding the cards drops keyboard focus; put it back somewhere sensible
+    // (unless something, such as a field error, has already taken it).
+    function restoreFocus(trigger, fallback) {
+      var active = document.activeElement;
+      if (active && active !== document.body && document.contains(active)) return;
+      var target = trigger && document.contains(trigger) && !trigger.disabled ? trigger : fallback;
+      if (target) target.focus();
+    }
+
     var fieldCount = 0;
     function linkLabel(label, input) {
       if (!input.id) input.id = 'field' + (++fieldCount);
@@ -265,6 +282,14 @@ var Contract = {
       return label;
     }
     function labelled(text, input) { return [linkLabel(el('label', { textContent: text }), input), input]; }
+    // A label for a group of fields (the header rows), which a <label> cannot point at.
+    function groupLabelled(text, group) {
+      var title = el('div', { className: 'group-label', textContent: text });
+      title.id = 'group' + (++fieldCount);
+      group.setAttribute('role', 'group');
+      group.setAttribute('aria-labelledby', title.id);
+      return [title, group];
+    }
 
     // ----- field errors: red outline, a message, aria-invalid/aria-describedby, and focus -----
     function clearInvalid(input) {
@@ -290,7 +315,7 @@ var Contract = {
       input.errorNote = note;
       (anchor || input).insertAdjacentElement('afterend', note);
       if (quiet) return;
-      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      scrollTo(input);
       input.focus();
     }
 
@@ -313,10 +338,16 @@ var Contract = {
       var nameInput = el('input', { type: 'text', placeholder: 'Name', autocapitalize: 'none', spellcheck: false, value: name || '' });
       nameInput.setAttribute('aria-label', 'Header name');
       var valueInput = el('input', { type: 'password', autocomplete: 'off', spellcheck: false, placeholder: hasValue ? 'Saved' : 'Value' });
+      if (hasValue) valueInput.setAttribute('aria-describedby', 'savedValueNote');
       valueInput.setAttribute('aria-label', 'Header value');
       var remove = el('button', { type: 'button', className: 'secondary remove', textContent: '×' });
       remove.setAttribute('aria-label', 'Remove header');
-      remove.onclick = function () { row.remove(); markDirty(); };
+      remove.onclick = function () {
+        var neighbour = row.nextElementSibling || row.previousElementSibling;
+        row.remove();
+        markDirty();
+        if (neighbour) neighbour.children[0].focus();
+      };
       row.append(nameInput, valueInput, remove);
       box.appendChild(row);
     }
@@ -353,7 +384,7 @@ var Contract = {
       var body = el('div', { className: 'dest-body' }, [].concat(
         labelled('Name', nameInput), labelled('URL', urlInput),
         [el('p', { className: 'hint', textContent: 'Each message is sent as a POST. Use https.' })],
-        labelled('Headers', headers), [addHeader,
+        groupLabelled('Headers', headers), [addHeader,
         el('p', { className: 'hint', textContent: 'Values stay on this phone and are never shown again. Example: Authorization and Bearer your-token. Leave a saved value blank to keep it.' })],
         labelled('Format', format), [fieldWrap, actions]));
       card.append(summary, body);
@@ -411,7 +442,11 @@ var Contract = {
         select.value = select.options[0].value;
       }
       select.dataset.prev = select.value;
+      select.onkeydown = function () { select.keyed = true; };
       select.onchange = function () {
+        var keyboard = select.keyed;
+        select.keyed = false;
+        discardUntouchedCard(select);
         if (select.value !== NEW_WEBHOOK) {
           select.dataset.prev = select.value;
           if (select.value) delete select.dataset.needsChoice;
@@ -425,8 +460,23 @@ var Contract = {
         var card = addDestination({}, true);
         select.value = card.dataset.id;
         select.dataset.prev = select.value;
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        select.dataset.madeCard = card.dataset.id;
+        // Pointer users are taken to the new card. Keyboard users stay on the select, so arrowing past
+        // the option does not move them; they are told where the card is.
+        if (keyboard) setStatus('New webhook added in the Webhooks section. Fill in its URL.');
+        else scrollTo(card);
       };
+    }
+
+    // A card made by choosing "+ New webhook…" is removed again if nothing was typed in it and the choice moved on.
+    function discardUntouchedCard(select) {
+      var id = select.dataset.madeCard;
+      if (!id || select.value === id) return;
+      delete select.dataset.madeCard;
+      var card = Array.prototype.filter.call(destinationsBox.children, function (c) { return c.dataset.id === id; })[0];
+      if (!card || card.fields.name.value || card.fields.url.value) return;
+      card.remove();
+      refreshSelects();
     }
 
     function refreshSelects() {
@@ -448,6 +498,8 @@ var Contract = {
         var row = select.closest('.command');
         if (row) { row.open = true; row.refresh(); }
       });
+      var firstAffected = affected[0];
+      restoreFocus(null, firstAffected || addDestinationButton);
       if (affected.length) setStatus('Removed. ' + affected.length + ' place' + (affected.length === 1 ? ' needs' : 's need') + ' another webhook before you can save.', 'error');
     }
 
@@ -606,6 +658,7 @@ var Contract = {
         setStatus('Choose a webhook for the marked field before saving.', 'error');
         return;
       }
+      var trigger = document.activeElement;
       setBusy(true);
       setStatus('Saving…');
       try {
@@ -622,7 +675,7 @@ var Contract = {
         setStatus(labelFor(testId) + ': ' + test.message + (test.ok ? ' It is set up.' : permissionNote(test.permission, test.host)), test.ok ? 'ok' : 'error');
       } catch (error) {
         setStatus('Could not contact the Webhook plugin. Try reopening this page.', 'error');
-      } finally { setBusy(false); }
+      } finally { setBusy(false); restoreFocus(trigger, saveButton); }
     }
 
     saveButton.onclick = function () { saveAll(); };
@@ -639,7 +692,7 @@ var Contract = {
         setStatus(result.error || result.message, result.error ? 'error' : 'ok');
       } catch (error) {
         setStatus('Could not contact the Webhook plugin. Try reopening this page.', 'error');
-      } finally { setBusy(false); }
+      } finally { setBusy(false); restoreFocus(pinButton, saveButton); }
     };
 
     twoStep(unlinkButton, 'Tap again to clear everything', async function () {
@@ -649,7 +702,7 @@ var Contract = {
         setStatus('Settings cleared.', 'ok');
       } catch (error) {
         setStatus('Could not clear the settings. Try reopening this page.', 'error');
-      } finally { setBusy(false); }
+      } finally { setBusy(false); restoreFocus(unlinkButton, saveButton); }
     });
 
     Pebble.addEventListener('ready', async function (event) {
