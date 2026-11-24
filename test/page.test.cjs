@@ -159,7 +159,148 @@ test('the timeline pin button adds the pin, and Clear settings empties the page'
   assert.match(t.document.querySelector('#status').textContent, /Pin added/);
 
   await t.click(t.document.querySelector('#unlink'));
+  await t.click(t.document.querySelector('#unlink'));   // the first tap only asks for confirmation
   assert.match(t.document.querySelector('#status').textContent, /cleared/);
   assert.strictEqual(t.document.querySelector('#destinations input[type=url]').value, '');
   assert.strictEqual(Object.keys(t.store).length, 0);
+});
+
+const addWebhook = async (t, name, url) => {
+  await t.click(t.document.querySelector('#addDestination'));
+  const cards = t.document.querySelectorAll('#destinations details');
+  const card = cards[cards.length - 1];
+  t.type(card.fields.name, name);
+  t.type(card.fields.url, url);
+  return card;
+};
+const choose = (t, select, value) => { select.value = value; select.dispatchEvent(new t.window.Event('change', { bubbles: true })); };
+const removeButton = (card) => [...card.querySelectorAll('button')].find((b) => /remove/i.test(b.textContent));
+
+test('removing a webhook does not quietly move its buttons to another one', async () => {
+  const t = await start();
+  const one = await fillBasic(t, 'https://one.test/h');
+  t.type(one.fields.name, 'One');
+  const two = await addWebhook(t, 'Two', 'https://two.test/h');
+  const command = t.document.querySelector('#commandsUp .command');
+  t.type(command.input, 'lights_off');
+  choose(t, command.destination, two.dataset.id);
+  choose(t, t.document.getElementById('noteDestination'), two.dataset.id);
+
+  await t.click(removeButton(two));
+  assert.ok(t.document.contains(two), 'the first tap only asks');
+  await t.click(removeButton(two));
+  assert.ok(!t.document.contains(two));
+
+  for (const select of [command.destination, t.document.getElementById('noteDestination')]) {
+    assert.strictEqual(select.value, '');
+    assert.strictEqual(select.options[select.selectedIndex].text, 'Choose a webhook…');
+    assert.strictEqual(select.getAttribute('aria-invalid'), 'true');
+  }
+  assert.ok(command.open);
+  assert.match(command.querySelector('summary').textContent, /choose a webhook/);
+
+  const before = t.sent.length;
+  await t.click(t.document.querySelector('#save'));
+  assert.strictEqual(t.sent.length, before, 'nothing is saved while a choice is missing');
+  assert.match(t.document.querySelector('#status').textContent, /Choose a webhook/);
+
+  choose(t, command.destination, one.dataset.id);
+  choose(t, t.document.getElementById('noteDestination'), one.dataset.id);
+  await t.click(t.document.querySelector('#save'));
+  assert.strictEqual(t.sent.length, before + 1);
+  assert.strictEqual(t.document.querySelector('#status').textContent, 'Saved.');
+  t.window.close();
+});
+
+test('Remove and Clear all settings take two taps', async () => {
+  const t = await start();
+  await fillBasic(t, 'https://x.test/h');
+  await t.click(t.document.querySelector('#save'));
+  const card = t.document.querySelector('#destinations details');   // saving rebuilds the cards
+  const remove = removeButton(card);
+  await t.click(remove);
+  assert.ok(t.document.contains(card));
+  assert.strictEqual(remove.textContent, 'Tap again to remove');
+  assert.ok(remove.hasAttribute('data-confirming'));
+
+  const unlink = t.document.querySelector('#unlink');
+  await t.click(unlink);
+  assert.strictEqual(unlink.textContent, 'Tap again to clear everything');
+  assert.ok(Object.keys(t.store).length > 0, 'nothing is cleared by the first tap');
+  await t.click(unlink);
+  assert.strictEqual(Object.keys(t.store).length, 0);
+  assert.strictEqual(unlink.textContent, 'Clear all settings');
+  t.window.close();
+});
+
+test('the page says when there are unsaved changes, and warns before leaving', async () => {
+  const t = await start();
+  const dirty = t.document.getElementById('dirty');
+  assert.strictEqual(dirty.textContent, '');
+  await fillBasic(t, 'https://x.test/h');
+  assert.strictEqual(dirty.textContent, 'Unsaved changes');
+  const leave = new t.window.Event('beforeunload', { cancelable: true });
+  t.window.dispatchEvent(leave);
+  assert.ok(leave.defaultPrevented);
+
+  await t.click(t.document.querySelector('#save'));
+  assert.strictEqual(dirty.textContent, '');
+  const quiet = new t.window.Event('beforeunload', { cancelable: true });
+  t.window.dispatchEvent(quiet);
+  assert.ok(!quiet.defaultPrevented);
+
+  const rebuilt = t.document.querySelector('#destinations details');   // saving rebuilds the cards
+  [...rebuilt.querySelectorAll('button')].find((b) => b.textContent.includes('Add header')).click();
+  assert.strictEqual(dirty.textContent, 'Unsaved changes');
+  assert.ok(t.document.querySelector('.savebar #save'), 'Save sits in the sticky bar');
+});
+
+test('the page calls them webhooks everywhere the user can read', async () => {
+  const t = await start();
+  assert.doesNotMatch(t.document.querySelector('main').textContent, /destination/i);
+  assert.ok([...t.document.querySelectorAll('h2')].some((h) => h.textContent === 'Webhooks'));
+  assert.ok(t.document.querySelector('#addDestination').textContent.includes('Add webhook'));
+  assert.strictEqual(t.document.querySelector('#destinations summary span').textContent, 'Webhook');
+});
+
+test('each button command is one collapsed row that says what it does', async () => {
+  const t = await start();
+  await fillBasic(t, 'https://x.test/h');
+  t.type(t.document.querySelector('#destinations details').fields.name, 'Home');
+  const rows = [...t.document.querySelectorAll('.command')];
+  assert.strictEqual(rows.length, 6);
+  assert.ok(rows.every((row) => !row.open));
+  assert.strictEqual(rows[0].querySelector('summary').textContent, 'Presswhatnot'.slice(0, 5) + 'not set');
+  t.type(rows[0].input, 'lights_off');
+  assert.strictEqual(rows[0].querySelector('summary').textContent, 'Presslights_off → Home');
+  assert.strictEqual(t.document.getElementById('labelUp').placeholder, 'lights_off');
+  t.type(rows[1].input, 'fan');
+  assert.strictEqual(t.document.getElementById('labelUp').placeholder, 'lights_off · fan');
+});
+
+test('the page shows what fits the product it is part of', async () => {
+  const plugin = await start();
+  assert.ok(plugin.document.getElementById('reminderUp').hidden);
+  assert.ok(!plugin.document.getElementById('pinSection').hidden);
+
+  const watchapp = await start({ watchapp: true });
+  assert.ok(!watchapp.document.getElementById('reminderUp').hidden);
+  assert.ok(watchapp.document.getElementById('pinSection').hidden);
+});
+
+test('first-run steps show until something is saved', async () => {
+  const store = {};
+  const first = await start({ store });
+  assert.ok(!first.document.getElementById('firstRun').hidden);
+  await fillBasic(first, 'https://x.test/h');
+  await first.click(first.document.querySelector('#save'));
+  assert.ok(first.document.getElementById('firstRun').hidden);
+  const reopened = await start({ store });
+  assert.ok(reopened.document.getElementById('firstRun').hidden);
+});
+
+test('small controls are at least 44px tall', () => {
+  const fs = require('fs');
+  const html = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'config.html'), 'utf8');
+  assert.match(html, /\.command details > summary \{[^}]*min-height: 44px/);
 });

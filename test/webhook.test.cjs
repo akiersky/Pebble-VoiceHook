@@ -68,6 +68,14 @@ test('a reference to a webhook that does not exist is an error, not repaired', (
   assert.deepStrictEqual(unknownCommand.target, { kind: 'command', slot: 'down_hold', field: 'destination' });
 });
 
+test('an explicitly empty webhook choice is an error; a missing one means the first webhook', () => {
+  const emptyNote = cleanConfig({ destinations: [dest()], noteDestination: '' });
+  assert.deepStrictEqual(emptyNote.target, { kind: 'note', field: 'destination' });
+  const emptyCommand = cleanConfig({ destinations: [dest()], commands: { up_hold: { command: 'x', destination: '' } } });
+  assert.deepStrictEqual(emptyCommand.target, { kind: 'command', slot: 'up_hold', field: 'destination' });
+  assert.strictEqual(save({ destinations: [dest()], commands: { up_hold: { command: 'x' } } }).commands.up_hold.destination, 'a');
+});
+
 test('JSON field names that collide with the added metadata are refused', () => {
   const clash = cleanConfig({ destinations: [dest({ field: 'timestamp' })] });
   assert.deepStrictEqual(clash.target, { kind: 'destination', id: 'a', field: 'field' });

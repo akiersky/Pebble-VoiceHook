@@ -16,7 +16,7 @@ var Contract = {
     { id: 'down_double', button: 'down', gesture: 'double press', wire: 5 },
     { id: 'down_hold', button: 'down', gesture: 'hold', wire: 6 },
   ],
-  WIRE: { KEYS: ['TEXT', 'SLOT', 'RESULT', 'MESSAGE', 'UP_LABEL', 'DOWN_LABEL'], RESULT_OK: 1, RESULT_FAIL: 0, MESSAGE_MAX: 90 },
+  WIRE: { KEYS: ['TEXT', 'SLOT', 'RESULT', 'MESSAGE', 'UP_LABEL', 'DOWN_LABEL', 'CONFIGURED'], RESULT_OK: 1, RESULT_FAIL: 0, MESSAGE_MAX: 90 },
 };
 // ---- end shared contract ----
 
@@ -35,7 +35,7 @@ Pebble.addEventListener('ready', function () {
   Pebble.invokeAction({ plugin: PLUGIN_UUID, action: 'get_labels', args: {} }).then(function (result) {
     if (!result.ok) return;
     var labels = JSON.parse(result.text);
-    Pebble.sendAppMessage({ UP_LABEL: labels.up || '', DOWN_LABEL: labels.down || '' }, function () {}, function () {});
+    Pebble.sendAppMessage({ UP_LABEL: labels.up || '', DOWN_LABEL: labels.down || '', CONFIGURED: labels.configured ? 1 : 0 }, function () {}, function () {});
   }, function (error) {
     console.error('get_labels failed: ' + (error && error.name));
   });

@@ -17,7 +17,7 @@ var Contract = {
     { id: 'down_double', button: 'down', gesture: 'double press', wire: 5 },
     { id: 'down_hold', button: 'down', gesture: 'hold', wire: 6 },
   ],
-  WIRE: { KEYS: ['TEXT', 'SLOT', 'RESULT', 'MESSAGE', 'UP_LABEL', 'DOWN_LABEL'], RESULT_OK: 1, RESULT_FAIL: 0, MESSAGE_MAX: 90 },
+  WIRE: { KEYS: ['TEXT', 'SLOT', 'RESULT', 'MESSAGE', 'UP_LABEL', 'DOWN_LABEL', 'CONFIGURED'], RESULT_OK: 1, RESULT_FAIL: 0, MESSAGE_MAX: 90 },
 };
 // ---- end shared contract ----
 
@@ -74,7 +74,7 @@ function cleanHeaders(raw, previous, hostChanged) {
 // Errors carry a `target` saying which field is wrong, so the settings page can mark it.
 function cleanDestination(raw, previous) {
   var id = stringValue(raw && raw.id);
-  if (!/^[A-Za-z0-9_-]{1,20}$/.test(id)) return { error: 'A destination has an invalid id.' };
+  if (!/^[A-Za-z0-9_-]{1,20}$/.test(id)) return { error: 'A webhook has an invalid id.' };
   var name = stringValue(raw.name).slice(0, Contract.LIMITS.NAME) || 'Webhook';
   var at = function (field, extra) { return Object.assign({ kind: Contract.TARGETS.DESTINATION, id: id, field: field }, extra); };
   var parsed = parseUrl(raw.url);
@@ -98,20 +98,20 @@ function findDestination(config, id) {
 // Returns { config } or { error, target }. A reference to a webhook that doesn't exist is an error, not repaired.
 function cleanConfig(message, previous) {
   var list = Array.isArray(message.destinations) ? message.destinations : [];
-  if (list.length > Contract.LIMITS.DESTINATIONS) return { error: 'At most ' + Contract.LIMITS.DESTINATIONS + ' destinations.' };
+  if (list.length > Contract.LIMITS.DESTINATIONS) return { error: 'At most ' + Contract.LIMITS.DESTINATIONS + ' webhooks.' };
   var destinations = [];
   var byId = Object.create(null);
   for (var i = 0; i < list.length; i++) {
     var oldDestination = previous && findDestination(previous, stringValue(list[i] && list[i].id));
     var cleaned = cleanDestination(list[i], oldDestination);
     if (cleaned.error) return { error: cleaned.error, target: cleaned.target };
-    if (byId[cleaned.destination.id]) return { error: 'A destination appears twice.' };
+    if (byId[cleaned.destination.id]) return { error: 'A webhook appears twice.' };
     byId[cleaned.destination.id] = cleaned.destination;
     destinations.push(cleaned.destination);
   }
   var fallback = destinations.length ? destinations[0].id : '';
   var noteDestination = fallback;
-  if (message.noteDestination) {
+  if (message.noteDestination !== undefined) {
     if (!byId[message.noteDestination]) return { error: 'Choose a webhook that exists for voice notes.', target: { kind: Contract.TARGETS.NOTE, field: Contract.FIELDS.DESTINATION } };
     noteDestination = message.noteDestination;
   }
@@ -124,7 +124,7 @@ function cleanConfig(message, previous) {
     var slotName = SLOTS[j].replace('_', ' ');
     var at = function (field, extra) { return Object.assign({ kind: Contract.TARGETS.COMMAND, slot: SLOTS[j], field: field }, extra); };
     if (command.length > Contract.LIMITS.COMMAND || /[\u0000-\u001f]/.test(command)) return { error: 'Button ' + slotName + ': the command is too long or has invalid characters.', target: at(Contract.FIELDS.COMMAND) };
-    var destinationId = raw.destination || fallback;
+    var destinationId = raw.destination === undefined ? fallback : raw.destination;
     var destination = byId[destinationId];
     if (!destination) return { error: 'Button ' + slotName + ': choose a webhook that exists.', target: at(Contract.FIELDS.DESTINATION) };
     // Saved extra header values belong to the webhook they were saved for.
@@ -316,7 +316,7 @@ async function runAction(req) {
   if (req.action === 'get_labels') {
     var stored = await loadConfig();
     var labels = stored && stored.labels ? stored.labels : { up: '', down: '' };
-    return { ok: true, text: JSON.stringify({ up: labels.up, down: labels.down }) };
+    return { ok: true, text: JSON.stringify({ up: labels.up, down: labels.down, configured: !!stored }) };
   }
   console.error('Unsupported action: ' + req.action);
   return { ok: false, code: 'PLUGIN_UNAVAILABLE', message: 'Unsupported Webhook action.' };

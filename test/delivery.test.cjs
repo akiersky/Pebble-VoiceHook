@@ -84,7 +84,7 @@ test('settings that point at a removed webhook give an error instead of throwing
 test('the watch can ask for the button reminders', async () => {
   const t = await configured();
   const result = await t.action({ action: 'get_labels', args: {} });
-  assert.deepStrictEqual(JSON.parse(result.text), { up: 'Lights', down: '' });
+  assert.deepStrictEqual(JSON.parse(result.text), { up: 'Lights', down: '', configured: true });
   const empty = await start();
-  assert.deepStrictEqual(JSON.parse((await empty.action({ action: 'get_labels', args: {} })).text), { up: '', down: '' });
+  assert.deepStrictEqual(JSON.parse((await empty.action({ action: 'get_labels', args: {} })).text), { up: '', down: '', configured: false });
 });

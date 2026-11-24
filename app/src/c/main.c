@@ -40,6 +40,8 @@ static int32_t s_anim_ms = ICON_ANIMATION_MS;
 static bool s_quick_launch = false;
 static bool s_dictating = false;
 static bool s_sending_voice = false;
+// The phone says nothing is set up yet, so recording or sending would only fail.
+static bool s_setup_needed = false;
 static time_t s_anim_start_s;
 static uint16_t s_anim_start_ms;
 static char s_message[WIRE_MESSAGE_MAX + 1];
@@ -284,6 +286,16 @@ static void prv_draw_confirm(GContext *ctx, GPoint center, int32_t elapsed) {
   }
 }
 
+// Three dots that swell in turn while the phone is sending.
+static void prv_draw_sending_dots(GContext *ctx, GPoint center, int32_t elapsed) {
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  for (int i = 0; i < 3; i++) {
+    int32_t angle = (TRIG_MAX_ANGLE * elapsed / 900 + i * (TRIG_MAX_ANGLE / 3)) % TRIG_MAX_ANGLE;
+    int radius = 6 + (sin_lookup(angle) + TRIG_MAX_RATIO) * 5 / (2 * TRIG_MAX_RATIO);
+    graphics_fill_circle(ctx, GPoint(center.x + (i - 1) * 28, center.y), radius);
+  }
+}
+
 static void prv_canvas_update(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   graphics_context_set_compositing_mode(ctx, GCompOpSet);
@@ -297,6 +309,13 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
   GPoint center = GPoint(bounds.size.w / 2, bounds.size.h * 38 / 100);
   switch (s_state) {
     case StateIdle:
+      if (s_setup_needed) {
+        graphics_context_set_text_color(ctx, GColorBlack);
+        graphics_draw_text(ctx, "Set up Webhook in the phone app", fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD),
+                           GRect(12, bounds.size.h / 2 - 56, bounds.size.w - 24, 112),
+                           GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+        break;
+      }
       prv_draw_mic(ctx, prv_idle_pose(bounds));
       prv_draw_button_arrow(ctx, bounds, bounds.size.h / 2);
       prv_draw_button_label(ctx, bounds, bounds.size.h * 17 / 100, s_up_label);
@@ -306,6 +325,7 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
       prv_draw_mic(ctx, prv_mic_in_flight(bounds, elapsed));
       break;
     case StateSending:
+      prv_draw_sending_dots(ctx, center, elapsed);
       break;
     case StateOk:
       prv_draw_confirm(ctx, center, elapsed);
@@ -403,7 +423,7 @@ static void prv_frame(void *data) {
     }
     return;
   }
-  bool going = (s_state == StateStarting) ||
+  bool going = (s_state == StateStarting) || (s_state == StateSending) ||
                ((s_state == StateOk || s_state == StateFail) && elapsed < s_anim_ms);
   if (going) s_frame_timer = app_timer_register(FRAME_MS, prv_frame, NULL);
 }
@@ -445,6 +465,9 @@ static void prv_show(State state, const char *text) {
     s_frame_timer = app_timer_register(FRAME_MS, prv_frame, NULL);
     int show_ms = s_anim_ms + 700;
     s_reset_timer = app_timer_register(show_ms > MIN_RESULT_SHOW_MS ? show_ms : MIN_RESULT_SHOW_MS, prv_reset, NULL);
+  } else if (state == StateSending) {
+    prv_restart_clock();
+    s_frame_timer = app_timer_register(FRAME_MS, prv_frame, NULL);
   }
   layer_mark_dirty(s_canvas);
 }
@@ -482,6 +505,11 @@ static void prv_store_label(Tuple *tuple, char *label, uint32_t key) {
 static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   Tuple *up = dict_find(iter, MESSAGE_KEY_UP_LABEL);
   Tuple *down = dict_find(iter, MESSAGE_KEY_DOWN_LABEL);
+  Tuple *configured = dict_find(iter, MESSAGE_KEY_CONFIGURED);
+  if (configured) {
+    s_setup_needed = configured->value->int32 == 0;
+    layer_mark_dirty(s_canvas);
+  }
   if (up || down) {
     prv_store_label(up, s_up_label, PersistUpLabel);
     prv_store_label(down, s_down_label, PersistDownLabel);
@@ -512,6 +540,10 @@ static void prv_dictation(DictationSession *session, DictationSessionStatus stat
 // The microphone swings to the middle and stands up, then recording begins (see prv_frame).
 static void prv_start_dictation(void) {
   if (s_state == StateSending || s_state == StateStarting) return;
+  if (s_setup_needed) {
+    prv_show(StateFail, "Set up Webhook on your phone first");
+    return;
+  }
   prv_activity();
   prv_cancel(&s_reset_timer);
   prv_cancel(&s_frame_timer);
@@ -544,6 +576,10 @@ static void prv_quick_start(void *data) { prv_start_dictation(); }
 static void prv_command(int slot) {
   prv_activity();
   if (s_state == StateSending || s_state == StateStarting) return;
+  if (s_setup_needed) {
+    prv_show(StateFail, "Set up Webhook on your phone first");
+    return;
+  }
   prv_send(NULL, slot);
 }
 

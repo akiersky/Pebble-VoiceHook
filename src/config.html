@@ -65,13 +65,23 @@
     summary small { color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dest-body { padding: 0 14px 14px; }
     .dest-body input, .dest-body select { background: var(--card); }
-    .command { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px; background: var(--bg); }
-    .command h3 { font-size: 15px; margin: 0 0 10px; }
+    .command { padding: 0; margin-top: 10px; }
+    .command > summary { padding: 12px 14px; }
+    .command-body { padding: 0 14px 14px; }
     .command label { font-size: 13px; margin: 10px 0 4px; }
-    .command h3 + label { margin-top: 0; }
+    .command-body > label:first-child { margin-top: 0; }
     .command input, .command select { padding: 10px 12px; background: var(--card); }
     .command details { border: 0; background: transparent; margin: 10px 0 0; }
-    .command summary { padding: 4px 0; font-weight: 500; color: var(--muted); font-size: 13px; }
+    .command details > summary { padding: 12px 0; min-height: 44px; align-items: center; font-weight: 500; color: var(--muted); font-size: 13px; }
+    h3.group { font-size: 15px; margin: 18px 0 8px; }
+    h3.group:first-of-type { margin-top: 4px; }
+    button[data-confirming] { background: var(--danger); color: #ffffff; }
+    .savebar { position: sticky; bottom: 0; z-index: 4; display: flex; align-items: center; gap: 12px; margin: 16px -16px -40px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); }
+    .savebar #dirty { flex: 1; font-size: 14px; font-weight: 600; color: var(--muted); }
+    .savebar #dirty.show { color: var(--danger); }
+    .savebar #dirty.show::before { content: "\25CF  "; }
+    .savebar button { flex: none; min-width: 112px; }
+    #firstRun ol { margin: 0; padding-left: 22px; line-height: 1.6; }
   </style>
 </head>
 <body>
@@ -87,45 +97,61 @@
     <p id="warning" role="alert" hidden></p>
     <div id="status" role="status" aria-live="polite"></div>
 
+    <section id="firstRun" hidden>
+      <h2>Get started</h2>
+      <ol>
+        <li>Paste your webhook's URL below.</li>
+        <li>Add a header if it needs one, such as <code>Authorization</code>.</li>
+        <li>Tap <b>Save &amp; send test message</b> and allow the connection when your phone asks.</li>
+      </ol>
+    </section>
+
     <section>
-      <h2>Destinations</h2>
+      <h2>Webhooks</h2>
       <p class="hint" style="margin: 0 0 12px;">Where messages can go. Add one for each service. Each new host asks for your permission the first time it's used.</p>
       <div id="destinations"></div>
-      <button id="addDestination" class="secondary" type="button" style="width: 100%;">+ Add destination</button>
+      <button id="addDestination" class="secondary" type="button" style="width: 100%;">+ Add webhook</button>
     </section>
 
     <section>
       <h2>Voice notes</h2>
       <label for="noteDestination">Webhook</label>
       <select id="noteDestination"></select>
-      <p class="hint">On the watchapp, press Select and speak.</p>
+      <p class="hint" id="noteHint">On the watchapp, press Select and speak.</p>
     </section>
 
-    <section>
+    <section id="commandsSection">
       <h2>Button commands</h2>
-      <p class="hint" style="margin: 0 0 4px;">Send a fixed command with Up or Down on the watchapp. Leave a command empty to turn that button off.</p>
-      <label for="labelUp">Up button reminder</label>
-      <input id="labelUp" type="text" autocomplete="off" placeholder="e.g. Lights">
+      <p class="hint" id="commandsHint" style="margin: 0 0 4px;">Send a fixed command with Up or Down on the watchapp. Leave a command empty to turn that button off.</p>
+      <h3 class="group">Up button</h3>
+      <div id="reminderUp">
+        <label for="labelUp">Reminder</label>
+        <input id="labelUp" type="text" autocomplete="off" placeholder="e.g. Lights">
+      </div>
       <div id="commandsUp"></div>
-      <label for="labelDown">Down button reminder</label>
-      <input id="labelDown" type="text" autocomplete="off" placeholder="e.g. Garage">
+      <h3 class="group">Down button</h3>
+      <div id="reminderDown">
+        <label for="labelDown">Reminder</label>
+        <input id="labelDown" type="text" autocomplete="off" placeholder="e.g. Garage">
+      </div>
       <div id="commandsDown"></div>
-      <p class="hint">The reminder is shown on the watch with an arrow pointing at the button. Write whatever helps you remember what it does.</p>
+      <p class="hint" id="reminderHint">The reminder is shown in large text on the watch with an arrow at the button, so keep it to about 8 characters. List the press, double press and hold in order, for example <code>Lights · Fan · Off</code>.</p>
     </section>
 
-    <div class="actions" style="margin: 0 0 12px;">
-      <button id="save" type="button">Save</button>
-    </div>
-
-    <section>
+    <section id="pinSection">
       <h2>Timeline pin</h2>
-      <p class="hint" style="margin: 0 0 12px;">Adds a "Send note" pin to your watch's timeline. Open it, say your note, and it goes to your voice-note destination.</p>
+      <p class="hint" style="margin: 0 0 12px;">Adds a "Send note" pin to your watch's timeline. Open it, say your note, and it goes to your voice-note webhook.</p>
       <button id="pin" class="secondary" type="button" style="width: 100%;">Add "Send note" pin to my watch</button>
     </section>
 
     <footer>
       <button id="unlink" class="danger" type="button">Clear all settings</button>
     </footer>
+
+    <div class="savebar">
+      <span id="dirty" role="status" aria-live="polite"></span>
+      <button id="save" type="button">Save</button>
+    </div>
   </main>
 
   <script>
@@ -144,9 +170,12 @@ var Contract = {
     { id: 'down_double', button: 'down', gesture: 'double press', wire: 5 },
     { id: 'down_hold', button: 'down', gesture: 'hold', wire: 6 },
   ],
-  WIRE: { KEYS: ['TEXT', 'SLOT', 'RESULT', 'MESSAGE', 'UP_LABEL', 'DOWN_LABEL'], RESULT_OK: 1, RESULT_FAIL: 0, MESSAGE_MAX: 90 },
+  WIRE: { KEYS: ['TEXT', 'SLOT', 'RESULT', 'MESSAGE', 'UP_LABEL', 'DOWN_LABEL', 'CONFIGURED'], RESULT_OK: 1, RESULT_FAIL: 0, MESSAGE_MAX: 90 },
 };
 // ---- end shared contract ----
+
+    // The watchapp copy of this page has this set to true when app/sync.js builds it.
+    var HAS_WATCHAPP = false;
 
     function slotTitle(slot) { return slot.gesture.charAt(0).toUpperCase() + slot.gesture.slice(1); }
 
@@ -156,8 +185,51 @@ var Contract = {
     var commandsDown = document.getElementById('commandsDown');
     var labelUp = document.getElementById('labelUp');
     var labelDown = document.getElementById('labelDown');
+    var firstRun = document.getElementById('firstRun');
+    var dirtyNote = document.getElementById('dirty');
     labelUp.maxLength = Contract.LIMITS.LABEL;
     labelDown.maxLength = Contract.LIMITS.LABEL;
+
+    function webhookSelects() { return [noteSelect].concat(commandRows().map(function (row) { return row.destination; })); }
+
+    // ----- unsaved changes -----
+    var dirty = false;
+    function markDirty() {
+      dirty = true;
+      dirtyNote.textContent = 'Unsaved changes';
+      dirtyNote.className = 'show';
+    }
+    function markClean() {
+      dirty = false;
+      dirtyNote.textContent = '';
+      dirtyNote.className = '';
+    }
+    document.addEventListener('input', markDirty);
+    document.addEventListener('change', markDirty);
+    window.addEventListener('beforeunload', function (event) {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
+
+    // A destructive button asks for a second tap within four seconds before it acts.
+    function twoStep(button, confirmText, action) {
+      var original = button.textContent;
+      var timer = null;
+      function reset() {
+        clearTimeout(timer);
+        timer = null;
+        button.textContent = original;
+        button.removeAttribute('data-confirming');
+      }
+      button.onclick = function () {
+        if (timer) { reset(); action(); return; }
+        button.textContent = confirmText;
+        button.setAttribute('data-confirming', 'true');
+        setStatus(confirmText + '.');
+        timer = setTimeout(reset, 4000);
+      };
+    }
 
     function commandRows() { return Array.prototype.slice.call(commandsUp.children).concat(Array.prototype.slice.call(commandsDown.children)); }
     var saveButton = document.getElementById('save');
@@ -207,7 +279,7 @@ var Contract = {
       Array.prototype.forEach.call(document.querySelectorAll('.invalid'), clearInvalid);
     }
 
-    function markInvalid(input, message, anchor) {
+    function markInvalid(input, message, anchor, quiet) {
       clearInvalid(input);
       var note = el('p', { className: 'field-error', textContent: message });
       note.id = 'error' + (++fieldCount);
@@ -217,6 +289,7 @@ var Contract = {
       input.setAttribute('aria-describedby', note.id);
       input.errorNote = note;
       (anchor || input).insertAdjacentElement('afterend', note);
+      if (quiet) return;
       input.scrollIntoView({ behavior: 'smooth', block: 'center' });
       input.focus();
     }
@@ -232,6 +305,7 @@ var Contract = {
         return;
       }
       addHeaderRow(box, '', false);
+      markDirty();
     }
 
     function addHeaderRow(box, name, hasValue) {
@@ -242,7 +316,7 @@ var Contract = {
       valueInput.setAttribute('aria-label', 'Header value');
       var remove = el('button', { type: 'button', className: 'secondary remove', textContent: '×' });
       remove.setAttribute('aria-label', 'Remove header');
-      remove.onclick = function () { row.remove(); };
+      remove.onclick = function () { row.remove(); markDirty(); };
       row.append(nameInput, valueInput, remove);
       box.appendChild(row);
     }
@@ -274,6 +348,7 @@ var Contract = {
       fieldWrap.hidden = format.value !== 'json';
       var test = el('button', { type: 'button', className: 'secondary', textContent: 'Save & send test message' });
       var remove = el('button', { type: 'button', className: 'danger', textContent: 'Remove' });
+      remove.className = 'danger';
       var actions = el('div', { className: 'actions two' }, [test, remove]);
       var body = el('div', { className: 'dest-body' }, [].concat(
         labelled('Name', nameInput), labelled('URL', urlInput),
@@ -284,13 +359,13 @@ var Contract = {
       card.append(summary, body);
 
       function refreshTitle() {
-        title.textContent = nameInput.value.trim() || 'New destination';
+        title.textContent = nameInput.value.trim() || 'Webhook';
         var match = /^https?:\/\/([^\/?#]+)/i.exec(urlInput.value.trim());
         sub.textContent = match ? match[1] : 'no URL yet';
         refreshSelects();
       }
       nameInput.oninput = refreshTitle; urlInput.oninput = refreshTitle;
-      remove.onclick = function () { card.remove(); refreshSelects(); };
+      twoStep(remove, 'Tap again to remove', function () { removeWebhook(card); });
       test.onclick = function () { saveAll(card.dataset.id); };
       card.read = function () {
         return {
@@ -298,7 +373,7 @@ var Contract = {
           headers: Array.prototype.map.call(headers.children, function (row) { return { name: row.children[0].value, value: row.children[1].value }; })
         };
       };
-      card.label = function () { return nameInput.value.trim() || 'New destination'; };
+      card.label = function () { return nameInput.value.trim() || 'Webhook'; };
       card.fields = { name: nameInput, url: urlInput, field: field, headers: headers };
       urlInput.setAttribute('aria-required', 'true');
       destinationsBox.appendChild(card);
@@ -325,13 +400,25 @@ var Contract = {
         select.appendChild(el('option', { value: card.dataset.id, textContent: card.label() }));
       });
       select.appendChild(el('option', { value: NEW_WEBHOOK, textContent: '+ New webhook…' }));
-      if (chosen) select.value = chosen;
-      if (!select.value || select.value === NEW_WEBHOOK) select.value = select.options[0].value;
+      var found = !!chosen && chosen !== NEW_WEBHOOK && Array.prototype.some.call(select.options, function (option) { return option.value === chosen; });
+      if (found) {
+        select.value = chosen;
+      } else if (select.dataset.needsChoice === '1') {
+        // The webhook this was using was removed: wait for an explicit choice.
+        select.insertBefore(el('option', { value: '', textContent: 'Choose a webhook…' }), select.firstChild);
+        select.value = '';
+      } else {
+        select.value = select.options[0].value;
+      }
       select.dataset.prev = select.value;
       select.onchange = function () {
-        if (select.value !== NEW_WEBHOOK) { select.dataset.prev = select.value; return; }
+        if (select.value !== NEW_WEBHOOK) {
+          select.dataset.prev = select.value;
+          if (select.value) delete select.dataset.needsChoice;
+          return;
+        }
         if (destinationsBox.children.length >= Contract.LIMITS.DESTINATIONS) {
-          setStatus('You can have up to ' + Contract.LIMITS.DESTINATIONS + ' destinations.', 'error');
+          setStatus('You can have up to ' + Contract.LIMITS.DESTINATIONS + ' webhooks.', 'error');
           select.value = select.dataset.prev;
           return;
         }
@@ -344,7 +431,33 @@ var Contract = {
 
     function refreshSelects() {
       fillSelect(noteSelect);
-      commandRows().forEach(function (row) { fillSelect(row.destination); });
+      commandRows().forEach(function (row) { fillSelect(row.destination); row.refresh(); });
+      updateReminderHints();
+    }
+
+    // Removing a webhook never quietly moves its buttons to another one: they ask for a new choice.
+    function removeWebhook(card) {
+      var id = card.dataset.id;
+      var affected = webhookSelects().filter(function (select) { return select.value === id; });
+      card.remove();
+      markDirty();
+      affected.forEach(function (select) { select.dataset.needsChoice = '1'; });
+      refreshSelects();
+      affected.forEach(function (select, i) {
+        markInvalid(select, 'The webhook used here was removed. Choose another.', null, true);
+        var row = select.closest('.command');
+        if (row) { row.open = true; row.refresh(); }
+      });
+      if (affected.length) setStatus('Removed. ' + affected.length + ' place' + (affected.length === 1 ? ' needs' : 's need') + ' another webhook before you can save.', 'error');
+    }
+
+    // The reminder boxes suggest the three commands, in order, until the user writes their own.
+    function updateReminderHints() {
+      [['up', labelUp, 'e.g. Lights'], ['down', labelDown, 'e.g. Garage']].forEach(function (group) {
+        var commands = commandRows().filter(function (row) { return row.slot.indexOf(group[0] + '_') === 0 && row.input.value.trim(); })
+          .map(function (row) { return row.input.value.trim(); });
+        group[1].placeholder = commands.length ? commands.join(' · ') : group[2];
+      });
     }
 
     // ----- commands -----
@@ -365,15 +478,29 @@ var Contract = {
           el('p', { className: 'hint', textContent: 'Added to the webhook\'s own headers. If a name is the same, both values are sent, comma-separated.' })
         ]);
         more.open = (entry.headers || []).length > 0;
-        var row = el('div', { className: 'command' }, [
-          el('h3', { textContent: slotTitle(slot) }),
-          linkLabel(el('label', { textContent: 'Command' }), input), input,
-          linkLabel(el('label', { textContent: 'Webhook' }), select), select, more
+        var rowTitle = el('span', { textContent: slotTitle(slot) });
+        var rowSub = el('small', {});
+        var row = el('details', { className: 'command' }, [
+          el('summary', {}, [rowTitle, rowSub]),
+          el('div', { className: 'command-body' }, [
+            linkLabel(el('label', { textContent: 'Command' }), input), input,
+            linkLabel(el('label', { textContent: 'Webhook' }), select), select, more
+          ])
         ]);
         row.slot = slot.id; row.input = input; row.destination = select; row.headers = headers; row.more = more;
+        // The closed row says what the button does: "lights_off → Home".
+        row.refresh = function () {
+          var command = input.value.trim();
+          var chosen = select.options[select.selectedIndex];
+          rowSub.textContent = !command ? 'not set' : (select.value === '' ? 'choose a webhook' : command + ' → ' + (chosen ? chosen.text : ''));
+        };
+        input.addEventListener('input', function () { row.refresh(); updateReminderHints(); });
+        select.addEventListener('change', function () { row.refresh(); });
         (slot.button === 'up' ? commandsUp : commandsDown).appendChild(row);
         fillSelect(select, entry.destination);
+        row.refresh();
       });
+      updateReminderHints();
     }
 
     function readCommands() {
@@ -394,11 +521,25 @@ var Contract = {
       buildCommands(state.commands || {});
       labelUp.value = (state.labels && state.labels.up) || '';
       labelDown.value = (state.labels && state.labels.down) || '';
+      firstRun.hidden = !!state.configured;
+      markClean();
       var insecure = state.insecure || [];
       warning.hidden = !insecure.length;
       if (insecure.length) warning.textContent = insecure.join(', ') + ' uses http, so messages and headers are sent without encryption. Prefer https.';
       summaryElement.textContent = list.length ? 'Sending to ' + list.map(function (d) { return d.host; }).join(', ') : 'Send notes from your watch to any URL.';
     }
+
+    function applyProduct() {
+      document.getElementById('reminderUp').hidden = !HAS_WATCHAPP;
+      document.getElementById('reminderDown').hidden = !HAS_WATCHAPP;
+      document.getElementById('reminderHint').hidden = !HAS_WATCHAPP;
+      document.getElementById('pinSection').hidden = HAS_WATCHAPP;
+      if (!HAS_WATCHAPP) {
+        document.getElementById('noteHint').textContent = 'Used by the timeline pin below, and by any app that sends a note through this plugin.';
+        document.getElementById('commandsHint').textContent = 'Fixed commands that watch apps can send through this plugin. Leave one empty to turn it off.';
+      }
+    }
+    applyProduct();
 
     function permissionNote(permission, host) {
       if (permission === 'denied') return ' Webhook is blocked from ' + host + '. Allow it under the plugin\'s Permissions.';
@@ -407,7 +548,7 @@ var Contract = {
 
     function labelFor(id) {
       var card = Array.prototype.filter.call(destinationsBox.children, function (c) { return c.dataset.id === id; })[0];
-      return card ? card.label() : 'the destination';
+      return card ? card.label() : 'the webhook';
     }
 
     // Marks the field the plugin says is wrong (see the target shapes in src/contract.js). Returns true if it found one.
@@ -431,6 +572,7 @@ var Contract = {
       } else if (target.kind === T.COMMAND) {
         var row = commandRows().filter(function (r) { return r.slot === target.slot; })[0];
         if (!row) return false;
+        row.open = true;
         if (target.field === F.HEADERS) {
           row.more.open = true;
           anchor = row.headers.children[target.index];
@@ -450,8 +592,21 @@ var Contract = {
 
     // Saves everything. With a destination id, also sends that destination a test message.
     async function saveAll(testId) {
-      setBusy(true);
       clearAllInvalid();
+      var unresolved = webhookSelects().filter(function (select) {
+        var row = select.closest('.command');
+        return select.value === '' && (!row || row.input.value.trim());
+      });
+      if (unresolved.length) {
+        unresolved.forEach(function (select, i) {
+          markInvalid(select, 'Choose a webhook.', null, i > 0);
+          var row = select.closest('.command');
+          if (row) { row.open = true; row.refresh(); }
+        });
+        setStatus('Choose a webhook for the marked field before saving.', 'error');
+        return;
+      }
+      setBusy(true);
       setStatus('Saving…');
       try {
         var result = await send({ type: Contract.MESSAGES.SAVE, destinations: readDestinations(), noteDestination: noteSelect.value, commands: readCommands(), labels: { up: labelUp.value, down: labelDown.value } });
@@ -459,6 +614,7 @@ var Contract = {
         var openIds = Array.prototype.filter.call(destinationsBox.children, function (c) { return c.open; }).map(function (c) { return c.dataset.id; });
         showState(result);
         Array.prototype.forEach.call(destinationsBox.children, function (c) { c.open = openIds.indexOf(c.dataset.id) !== -1; });
+        markClean();
         if (!testId) { setStatus('Saved.', 'ok'); return; }
         setStatus('Sending a test message…');
         var test = await send({ type: Contract.MESSAGES.TEST, destination: testId });
@@ -471,8 +627,9 @@ var Contract = {
 
     saveButton.onclick = function () { saveAll(); };
     addDestinationButton.onclick = function () {
-      if (destinationsBox.children.length >= Contract.LIMITS.DESTINATIONS) { setStatus('You can have up to ' + Contract.LIMITS.DESTINATIONS + ' destinations.', 'error'); return; }
+      if (destinationsBox.children.length >= Contract.LIMITS.DESTINATIONS) { setStatus('You can have up to ' + Contract.LIMITS.DESTINATIONS + ' webhooks.', 'error'); return; }
       addDestination({}, true);
+      markDirty();
     };
 
     pinButton.onclick = async function () {
@@ -485,7 +642,7 @@ var Contract = {
       } finally { setBusy(false); }
     };
 
-    unlinkButton.onclick = async function () {
+    twoStep(unlinkButton, 'Tap again to clear everything', async function () {
       setBusy(true);
       try {
         showState(await send({ type: Contract.MESSAGES.UNLINK }));
@@ -493,7 +650,7 @@ var Contract = {
       } catch (error) {
         setStatus('Could not clear the settings. Try reopening this page.', 'error');
       } finally { setBusy(false); }
-    };
+    });
 
     Pebble.addEventListener('ready', async function (event) {
       if (event.target !== 'plugin') return;

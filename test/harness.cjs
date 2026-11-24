@@ -32,7 +32,8 @@ async function start(options) {
   require(pluginPath);
 
   let ready;
-  const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'config.html'), 'utf8');
+  let html = fs.readFileSync(path.join(__dirname, '..', 'src', 'config.html'), 'utf8');
+  if (options.watchapp) html = html.replace('var HAS_WATCHAPP = false;', 'var HAS_WATCHAPP = true;');
   const dom = new JSDOM(html, {
     runScripts: 'dangerously',
     pretendToBeVisual: true,

@@ -36,7 +36,7 @@ var Contract = {
     { id: 'down_double', button: 'down', gesture: 'double press', wire: 5 },
     { id: 'down_hold', button: 'down', gesture: 'hold', wire: 6 },
   ],
-  WIRE: { KEYS: ['TEXT', 'SLOT', 'RESULT', 'MESSAGE', 'UP_LABEL', 'DOWN_LABEL'], RESULT_OK: 1, RESULT_FAIL: 0, MESSAGE_MAX: 90 },
+  WIRE: { KEYS: ['TEXT', 'SLOT', 'RESULT', 'MESSAGE', 'UP_LABEL', 'DOWN_LABEL', 'CONFIGURED'], RESULT_OK: 1, RESULT_FAIL: 0, MESSAGE_MAX: 90 },
 };
 // </inline>
 if (typeof module !== 'undefined' && module.exports) module.exports = Contract;

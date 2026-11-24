@@ -1,7 +1,7 @@
 # Glossary
 
 - **Webhook** (in the code, a *destination*): a named URL with its own headers and format. Up to 10. The
-  settings page says "webhook"; the code and the contract say `destination`.
+  settings page and the watch say "webhook"; the code and the contract say `destination`.
 - **Note**: dictated text sent with the Select button (or the timeline pin). Goes to the voice-note webhook.
   Confirmed with the paper plane.
 - **Command**: a fixed word the user chose for a button slot, sent as `{"command": "<name>"}`.
@@ -14,3 +14,7 @@
 - **Relay**: the phone-side script in the watchapp (`app/src/pkjs/index.js`) that passes the watch's requests
   to the plugin.
 - **Target**: the field of the settings page an error belongs to, so the page can mark it.
+- **Setup needed**: the phone tells the watch at launch whether anything is saved (`CONFIGURED`). If not, the
+  watch says "Set up Webhook in the phone app" instead of recording something that would only fail.
+- **Choose a webhook**: what a button or the voice note shows after its webhook was removed. It never moves to
+  another webhook by itself, and Save is blocked until a webhook is chosen.

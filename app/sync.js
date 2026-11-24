@@ -53,9 +53,17 @@ function manifest() {
 function outputs() {
   return [
     { file: 'src/plugin/index.js', content: readRoot('src/plugin/index.js') },
-    { file: 'src/config.html', content: readRoot('src/config.html') },
+    { file: 'src/config.html', content: watchappPage() },
     { file: 'package.json', content: manifest() },
   ];
+}
+
+// The settings page is shared with the standalone plugin; in the watchapp it also shows the watch's own settings.
+function watchappPage() {
+  const flag = 'var HAS_WATCHAPP = false;';
+  const page = readRoot('src/config.html');
+  if (!page.includes(flag)) throw new Error('src/config.html has no HAS_WATCHAPP flag');
+  return page.replace(flag, 'var HAS_WATCHAPP = true;');
 }
 
 const current = (file) => { try { return readHere(file); } catch (e) { return null; } };

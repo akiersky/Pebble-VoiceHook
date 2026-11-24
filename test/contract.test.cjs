@@ -30,17 +30,19 @@ function runRelay(invokeResult) {
   const calls = [];
   const replies = [];
   let onMessage;
+  let onReady;
   const sandbox = {
     console,
     Pebble: {
-      addEventListener(name, callback) { if (name === 'appmessage') onMessage = callback; },
+      addEventListener(name, callback) { if (name === 'appmessage') onMessage = callback; if (name === 'ready') onReady = callback; },
       invokeAction: (request) => { calls.push(request); return Promise.resolve(invokeResult || { ok: true, text: 'done' }); },
       sendAppMessage: (message) => { replies.push(message); },
     },
   };
   vm.runInNewContext(fs.readFileSync(path.join(root, 'app/src/pkjs/index.js'), 'utf8'), sandbox);
   const send = async (payload) => { onMessage({ payload }); await new Promise((resolve) => setTimeout(resolve, 5)); };
-  return { calls, replies, send };
+  const ready = async () => { onReady(); await new Promise((resolve) => setTimeout(resolve, 5)); };
+  return { calls, replies, send, ready };
 }
 
 test('the slot table is consistent', () => {
@@ -70,6 +72,16 @@ test('the phone relay sends notes, rejects unknown requests, and shortens long r
   assert.strictEqual(relay.calls.length, 1);
   assert.strictEqual(relay.replies[1].RESULT, Contract.WIRE.RESULT_FAIL);
   for (const reply of relay.replies) for (const key of Object.keys(reply)) assert.ok(Contract.WIRE.KEYS.includes(key), key);
+});
+
+test('on launch the relay tells the watch the reminders and whether anything is set up', async () => {
+  const configured = runRelay({ ok: true, text: JSON.stringify({ up: 'Lights', down: '', configured: true }) });
+  await configured.ready();
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(configured.replies[0])), { UP_LABEL: 'Lights', DOWN_LABEL: '', CONFIGURED: 1 });
+  const fresh = runRelay({ ok: true, text: JSON.stringify({ up: '', down: '', configured: false }) });
+  await fresh.ready();
+  assert.strictEqual(fresh.replies[0].CONFIGURED, 0);
+  for (const key of Object.keys(configured.replies[0])) assert.ok(Contract.WIRE.KEYS.includes(key), key);
 });
 
 test('the relay only reads keys the contract declares', () => {
