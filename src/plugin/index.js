@@ -5,7 +5,7 @@
 // ---- shared contract: generated from src/contract.js by `npm run contract`, do not edit ----
 var Contract = {
   MESSAGES: { STATUS: 'status', SAVE: 'save', TEST: 'test', PIN: 'pin', UNLINK: 'unlink' },
-  LIMITS: { HEADERS: 10, DESTINATIONS: 10, LABEL: 24, COMMAND: 100, HEADER_VALUE: 2000, TEXT: 8000, NAME: 40 },
+  LIMITS: { HEADERS: 10, DESTINATIONS: 10, LABEL: 24, COMMAND: 100, HEADER_NAME: 100, HEADER_VALUE: 2000, URL: 2000, TEXT: 8000, NAME: 40 },
   TARGETS: { DESTINATION: 'destination', COMMAND: 'command', NOTE: 'note', LABEL: 'label' },
   FIELDS: { URL: 'url', HEADERS: 'headers', JSON_FIELD: 'field', COMMAND: 'command', DESTINATION: 'destination', UP: 'up', DOWN: 'down' },
   PARTS: { NAME: 'name', VALUE: 'value' },
@@ -18,6 +18,31 @@ var Contract = {
     { id: 'down_hold', button: 'down', gesture: 'hold', wire: 6 },
   ],
   WIRE: { KEYS: ['TEXT', 'SLOT', 'RESULT', 'MESSAGE', 'UP_LABEL', 'DOWN_LABEL', 'CONFIGURED'], RESULT_OK: 1, RESULT_FAIL: 0, MESSAGE_MAX: 90 },
+  // The watch's buffers hold bytes, so LABEL and MESSAGE_MAX are counted in UTF-8 bytes, not characters.
+  utf8Bytes: function (text) {
+    var n = 0;
+    for (var i = 0; i < text.length; i++) {
+      var c = text.charCodeAt(i);
+      if (c < 0x80) n += 1;
+      else if (c < 0x800) n += 2;
+      else if (c >= 0xd800 && c <= 0xdbff && i + 1 < text.length) { n += 4; i++; }
+      else n += 3;
+    }
+    return n;
+  },
+  // The longest start of `text` that fits in `max` bytes, never cutting a character in half.
+  clipBytes: function (text, max) {
+    var n = 0;
+    for (var i = 0; i < text.length; i++) {
+      var c = text.charCodeAt(i);
+      var pair = c >= 0xd800 && c <= 0xdbff && i + 1 < text.length;
+      var size = c < 0x80 ? 1 : c < 0x800 ? 2 : pair ? 4 : 3;
+      if (n + size > max) return text.slice(0, i);
+      n += size;
+      if (pair) i++;
+    }
+    return text;
+  },
 };
 // ---- end shared contract ----
 
@@ -25,7 +50,7 @@ var CONFIG_KEY = 'webhook.config.v2';
 var LEGACY_KEY = 'webhook.config.v1';
 var SLOTS = Contract.SLOTS.map(function (slot) { return slot.id; });
 var FORBIDDEN_HEADERS = ['host', 'content-length', 'connection', 'transfer-encoding', 'cookie'];
-var RESERVED_FIELDS = ['timestamp', 'source'];
+var RESERVED_FIELDS = ['timestamp', 'source', 'command'];
 
 function stringValue(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -33,13 +58,25 @@ function stringValue(value) {
 
 function parseUrl(value) {
   var url = stringValue(value);
+  if (url.length > Contract.LIMITS.URL) return { error: 'That URL is too long.' };
+  // Browsers read a backslash as a slash, which would make a different host than the one shown here.
+  if (url.indexOf('\\') !== -1) return { error: 'The URL can\'t contain a backslash.' };
   var match = url.match(/^(https?):\/\/([^\/?#\s]+)([^\s]*)$/i);
   if (!match) return { error: 'Enter a full URL starting with https:// (or http://).' };
   var authority = match[2];
   if (authority.indexOf('@') !== -1) return { error: 'Put credentials in a header, not in the URL.' };
-  var host = authority.replace(/:\d+$/, '').toLowerCase();
-  if (!host) return { error: 'The URL has no host.' };
-  return { url: url, host: host, https: match[1].toLowerCase() === 'https' };
+  var parts = authority.match(/^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+)(?::(\d{1,5}))?$/);
+  if (!parts || parts[1] === '.' || (parts[2] && parseInt(parts[2], 10) > 65535)) return { error: 'The URL\'s host isn\'t valid. Use letters, digits, dots and dashes, with an optional :port.' };
+  var host = parts[1].toLowerCase();
+  var https = match[1].toLowerCase() === 'https';
+  var port = parts[2] ? String(parseInt(parts[2], 10)) : (https ? '443' : '80');
+  return { url: url, host: host, https: https, origin: (https ? 'https' : 'http') + '://' + host + ':' + port };
+}
+
+// Where a saved destination sends: scheme, host and port. A saved secret only follows an unchanged origin.
+function originOf(destination) {
+  var parsed = destination && parseUrl(destination.url);
+  return parsed && parsed.origin ? parsed.origin : null;
 }
 
 // A header list from the page. `previous` is the list saved before, so a blank value can mean "keep the
@@ -52,7 +89,7 @@ function cleanHeaders(raw, previous, hostChanged) {
   for (var i = 0; i < list.length; i++) {
     var name = stringValue(list[i] && list[i].name);
     if (!name) continue;
-    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) return { error: 'Header "' + name + '" is not a valid header name.', index: i, part: Contract.PARTS.NAME };
+    if (name.length > Contract.LIMITS.HEADER_NAME || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) return { error: 'Header "' + name + '" is not a valid header name.', index: i, part: Contract.PARTS.NAME };
     var lower = name.toLowerCase();
     if (FORBIDDEN_HEADERS.indexOf(lower) !== -1) return { error: 'The ' + name + ' header can\'t be set.', index: i, part: Contract.PARTS.NAME };
     if (seen[lower]) return { error: 'Header "' + name + '" appears twice.', index: i, part: Contract.PARTS.NAME };
@@ -79,13 +116,14 @@ function cleanDestination(raw, previous) {
   var at = function (field, extra) { return Object.assign({ kind: Contract.TARGETS.DESTINATION, id: id, field: field }, extra); };
   var parsed = parseUrl(raw.url);
   if (parsed.error) return { error: name + ': ' + parsed.error, target: at(Contract.FIELDS.URL) };
-  var hostChanged = !!previous && previous.host !== parsed.host;
+  var hostChanged = !!previous && originOf(previous) !== parsed.origin;
   var headers = cleanHeaders(raw.headers, previous && previous.headers, hostChanged);
   if (headers.error) return { error: name + ': ' + headers.error, target: at(Contract.FIELDS.HEADERS, { index: headers.index, part: headers.part }) };
   var format = raw.format === 'text' ? 'text' : 'json';
   var field = stringValue(raw.field) || 'text';
   if (!/^[A-Za-z0-9_.-]{1,40}$/.test(field)) return { error: name + ': the JSON field name can only use letters, digits, _ . and -.', target: at(Contract.FIELDS.JSON_FIELD) };
-  // timestamp and source are added to every JSON message, so a note can't use those names.
+  // timestamp and source are added to every JSON message, and a command is sent as "command", so a note can't use those names.
+  if (format === 'json' && field === '__proto__') return { error: name + ': "__proto__" can\'t be used as a field name.', target: at(Contract.FIELDS.JSON_FIELD) };
   if (format === 'json' && RESERVED_FIELDS.indexOf(field) !== -1) return { error: name + ': "' + field + '" is added to every message already. Pick another field name.', target: at(Contract.FIELDS.JSON_FIELD) };
   return { destination: { id: id, name: name, url: parsed.url, host: parsed.host, https: parsed.https, headers: headers.headers, format: format, field: field } };
 }
@@ -130,16 +168,16 @@ function cleanConfig(message, previous) {
     // Saved extra header values belong to the webhook they were saved for.
     var oldCommand = previous && previous.commands && previous.commands[SLOTS[j]];
     var oldHost = oldCommand && previous && findDestination(previous, oldCommand.destination);
-    var hostChanged = !!oldCommand && (!oldHost || oldHost.host !== destination.host);
+    var hostChanged = !!oldCommand && (!oldHost || originOf(oldHost) !== originOf(destination));
     var extra = cleanHeaders(raw.headers, oldCommand && oldCommand.headers, hostChanged);
     if (extra.error) return { error: 'Button ' + slotName + ': ' + extra.error, target: at(Contract.FIELDS.HEADERS, { index: extra.index, part: extra.part }) };
     commands[SLOTS[j]] = { command: command, destination: destinationId, headers: extra.headers };
   }
   var rawLabels = message.labels && typeof message.labels === 'object' ? message.labels : {};
   var labels = { up: stringValue(rawLabels.up), down: stringValue(rawLabels.down) };
-  if (labels.up.length > Contract.LIMITS.LABEL || labels.down.length > Contract.LIMITS.LABEL || /[\u0000-\u001f]/.test(labels.up + labels.down)) {
-    var badLabel = labels.up.length > Contract.LIMITS.LABEL || /[\u0000-\u001f]/.test(labels.up) ? Contract.FIELDS.UP : Contract.FIELDS.DOWN;
-    return { error: 'Button reminders can be up to ' + Contract.LIMITS.LABEL + ' characters.', target: { kind: Contract.TARGETS.LABEL, field: badLabel } };
+  if (Contract.utf8Bytes(labels.up) > Contract.LIMITS.LABEL || Contract.utf8Bytes(labels.down) > Contract.LIMITS.LABEL || /[\u0000-\u001f]/.test(labels.up + labels.down)) {
+    var badLabel = Contract.utf8Bytes(labels.up) > Contract.LIMITS.LABEL || /[\u0000-\u001f]/.test(labels.up) ? Contract.FIELDS.UP : Contract.FIELDS.DOWN;
+    return { error: 'A button reminder can be up to ' + Contract.LIMITS.LABEL + ' letters. Accented letters and emoji take more room.', target: { kind: Contract.TARGETS.LABEL, field: badLabel } };
   }
   return { config: { v: 2, destinations: destinations, noteDestination: noteDestination, commands: commands, labels: labels } };
 }
@@ -169,7 +207,7 @@ function buildRequest(destination, kind, value, now, extraHeaders) {
     body = JSON.stringify(payload);
     if (!hasType) headers['Content-Type'] = 'application/json';
   }
-  return { url: destination.url, options: { method: 'POST', headers: headers, body: body } };
+  return { url: destination.url, options: { method: 'POST', headers: headers, body: body, redirect: 'error' } };
 }
 
 // Settings saved by version 0.1 had a single destination at the top level.
@@ -191,6 +229,11 @@ async function loadConfig() {
   } catch (e) {
     return null;
   }
+}
+
+// The version 0.1 settings are migrated on load; once the new ones are saved (or cleared) the old copy must go too.
+async function removeLegacy() {
+  try { await Pebble.secureStorage.removeItem(LEGACY_KEY); } catch (e) {}
 }
 
 async function permissionState(host) {
@@ -222,7 +265,7 @@ async function deliver(destination, kind, value, doneText, extraHeaders) {
     if (name === 'NotAllowedError') {
       return { ok: false, status: 0, blocked: true, message: 'Webhook isn\'t allowed to connect to ' + destination.host + '. Allow it in the plugin\'s Permissions.' };
     }
-    return { ok: false, status: 0, message: 'Could not reach ' + destination.host + '. The message may not have been delivered.' };
+    return { ok: false, status: 0, message: 'Could not reach ' + destination.host + '. The message may not have been delivered. Redirects aren\'t followed, so use the final URL.' };
   }
 }
 
@@ -342,6 +385,7 @@ Pebble.registerConfigHandler(async function (message, respond) {
         return;
       }
       await Pebble.secureStorage.setItem(CONFIG_KEY, JSON.stringify(cleaned.config));
+      await removeLegacy();
       respond(summary(cleaned.config));
       return;
     }
@@ -371,6 +415,7 @@ Pebble.registerConfigHandler(async function (message, respond) {
 
     case Contract.MESSAGES.UNLINK:
       await Pebble.secureStorage.removeItem(CONFIG_KEY);
+      await removeLegacy();
       respond(summary(null));
       return;
 

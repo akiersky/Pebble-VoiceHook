@@ -326,3 +326,16 @@ test('choosing + New webhook adds a card; moving on without typing removes it ag
   select.dispatchEvent(new t.window.Event('change', { bubbles: true }));
   assert.strictEqual(t.document.querySelectorAll('#destinations > details').length, before);
 });
+
+test('settings saved by version 0.1 are migrated, and saving or clearing removes the old copy', async () => {
+  const old = JSON.stringify({ url: 'https://old.test/h', host: 'old.test', https: true, headers: [{ name: 'A', value: 'old-secret' }], format: 'json', field: 'text' });
+  const t = await start({ store: { 'webhook.config.v1': old } });
+  assert.strictEqual(t.document.querySelector('#destinations input[type=url]').value, 'https://old.test/h');
+  await t.click(t.document.querySelector('#save'));
+  assert.ok(!('webhook.config.v1' in t.store), 'saved: the old copy is gone');
+
+  const u = await start({ store: { 'webhook.config.v1': old } });
+  await u.click(u.document.querySelector('#unlink'));
+  await u.click(u.document.querySelector('#unlink'));
+  assert.strictEqual(Object.keys(u.store).length, 0, 'cleared: nothing left, including the old secret');
+});

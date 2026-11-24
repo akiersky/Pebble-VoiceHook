@@ -4,6 +4,7 @@ const assert = require('node:assert');
 // The plugin registers handlers on load, so give it a stub Pebble.
 global.Pebble = { registerActionHandler() {}, registerConfigHandler() {}, secureStorage: {} };
 const { parseUrl, cleanHeaders, cleanConfig, buildRequest, migrate } = require('../src/plugin/index.js');
+const Contract = require('../src/contract.js');
 
 const dest = (extra) => ({ id: 'a', name: 'Notes', url: 'https://example.com/hook', headers: [], ...extra });
 const save = (message, previous) => {
@@ -143,4 +144,58 @@ test('migrate upgrades version 0.1 settings and passes version 2 through', () =>
   const v2 = { v: 2, destinations: [], noteDestination: '', commands: {} };
   assert.strictEqual(migrate(v2), v2);
   assert.strictEqual(migrate(null), null);
+});
+
+test('URLs that real parsers would read differently are refused', () => {
+  assert.ok(parseUrl('https://good.com\\.evil.com/x').error);
+  assert.ok(parseUrl('https://good.com/a\\b').error);
+  assert.ok(parseUrl('https://exa mple.com/x').error);
+  assert.ok(parseUrl('https://exa_mple.com/x').error);
+  assert.ok(parseUrl('https://example.com:99999/x').error);
+  assert.ok(parseUrl('https://' + 'a'.repeat(2000) + '.com/x').error);
+  assert.strictEqual(parseUrl('https://[::1]:8443/x').host, '[::1]');
+  assert.strictEqual(parseUrl('https://Example.com/x').origin, 'https://example.com:443');
+  assert.strictEqual(parseUrl('http://example.com:8080/x').origin, 'http://example.com:8080');
+});
+
+test('header names have a length limit', () => {
+  assert.ok(cleanHeaders([{ name: 'X'.repeat(Contract.LIMITS.HEADER_NAME + 1), value: 'v' }]).error);
+  assert.ok(cleanHeaders([{ name: 'X'.repeat(Contract.LIMITS.HEADER_NAME), value: 'v' }]).headers);
+});
+
+test('a saved header value stays only with the same scheme, host and port', () => {
+  const saved = save({ destinations: [dest({ url: 'https://api.example.com/x', headers: [{ name: 'Authorization', value: 'Bearer SECRET' }] })] });
+  const blank = (url) => ({ destinations: [dest({ url, headers: [{ name: 'Authorization', value: '' }] })] });
+  assert.strictEqual(save(blank('https://api.example.com/other'), saved).destinations[0].headers[0].value, 'Bearer SECRET');
+  assert.strictEqual(save(blank('https://api.example.com:443/other'), saved).destinations[0].headers[0].value, 'Bearer SECRET');
+  assert.ok(cleanConfig(blank('http://api.example.com/x'), saved).target, 'http after https');
+  assert.ok(cleanConfig(blank('https://api.example.com:8443/x'), saved).target, 'another port');
+});
+
+test('a command keeps saved extra headers only for the same origin', () => {
+  const two = [dest({ id: 'a' }), dest({ id: 'b', url: 'http://example.com/hook' })];
+  const saved = save({ destinations: two, commands: { up_single: { command: 'go', destination: 'a', headers: [{ name: 'X-Scene', value: 'movie' }] } } });
+  const moved = cleanConfig({ destinations: two, commands: { up_single: { command: 'go', destination: 'b', headers: [{ name: 'x-scene', value: '' }] } } }, saved);
+  assert.deepStrictEqual(moved.target, { kind: 'command', slot: 'up_single', field: 'headers', index: 0, part: 'value' });
+});
+
+test('the JSON field cannot be one the plugin adds or one that rewrites the prototype', () => {
+  for (const field of ['command', 'timestamp', 'source', '__proto__']) {
+    assert.deepStrictEqual(cleanConfig({ destinations: [dest({ field })] }).target, { kind: 'destination', id: 'a', field: 'field' }, field);
+  }
+  assert.ok(cleanConfig({ destinations: [dest({ field: 'command', format: 'text' })] }).config);
+});
+
+test('requests refuse redirects', () => {
+  assert.strictEqual(buildRequest({ url: 'https://example.com/h', headers: [], format: 'json', field: 'text' }, 'text', 'hi', new Date()).options.redirect, 'error');
+});
+
+test('labels and messages are counted in bytes, and clipped without splitting a character', () => {
+  assert.strictEqual(Contract.utf8Bytes('a\u00e9\u4e2d\ud83d\ude00'), 1 + 2 + 3 + 4);
+  assert.ok(cleanConfig({ destinations: [], labels: { up: '\u4e2d'.repeat(9) } }).error, '27 bytes');
+  assert.deepStrictEqual(cleanConfig({ destinations: [], labels: { up: '\u4e2d'.repeat(8) } }).config.labels, { up: '\u4e2d'.repeat(8), down: '' });
+  assert.strictEqual(Contract.clipBytes('abc', 5), 'abc');
+  assert.strictEqual(Contract.clipBytes('ab\u4e2d', 4), 'ab');
+  assert.strictEqual(Contract.clipBytes('a\ud83d\ude00', 4), 'a');
+  assert.ok(Contract.utf8Bytes(Contract.clipBytes('\ud83d\ude00'.repeat(40), Contract.WIRE.MESSAGE_MAX)) <= Contract.WIRE.MESSAGE_MAX);
 });

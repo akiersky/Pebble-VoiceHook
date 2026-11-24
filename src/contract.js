@@ -24,7 +24,7 @@
 // <inline>
 var Contract = {
   MESSAGES: { STATUS: 'status', SAVE: 'save', TEST: 'test', PIN: 'pin', UNLINK: 'unlink' },
-  LIMITS: { HEADERS: 10, DESTINATIONS: 10, LABEL: 24, COMMAND: 100, HEADER_VALUE: 2000, TEXT: 8000, NAME: 40 },
+  LIMITS: { HEADERS: 10, DESTINATIONS: 10, LABEL: 24, COMMAND: 100, HEADER_NAME: 100, HEADER_VALUE: 2000, URL: 2000, TEXT: 8000, NAME: 40 },
   TARGETS: { DESTINATION: 'destination', COMMAND: 'command', NOTE: 'note', LABEL: 'label' },
   FIELDS: { URL: 'url', HEADERS: 'headers', JSON_FIELD: 'field', COMMAND: 'command', DESTINATION: 'destination', UP: 'up', DOWN: 'down' },
   PARTS: { NAME: 'name', VALUE: 'value' },
@@ -37,6 +37,31 @@ var Contract = {
     { id: 'down_hold', button: 'down', gesture: 'hold', wire: 6 },
   ],
   WIRE: { KEYS: ['TEXT', 'SLOT', 'RESULT', 'MESSAGE', 'UP_LABEL', 'DOWN_LABEL', 'CONFIGURED'], RESULT_OK: 1, RESULT_FAIL: 0, MESSAGE_MAX: 90 },
+  // The watch's buffers hold bytes, so LABEL and MESSAGE_MAX are counted in UTF-8 bytes, not characters.
+  utf8Bytes: function (text) {
+    var n = 0;
+    for (var i = 0; i < text.length; i++) {
+      var c = text.charCodeAt(i);
+      if (c < 0x80) n += 1;
+      else if (c < 0x800) n += 2;
+      else if (c >= 0xd800 && c <= 0xdbff && i + 1 < text.length) { n += 4; i++; }
+      else n += 3;
+    }
+    return n;
+  },
+  // The longest start of `text` that fits in `max` bytes, never cutting a character in half.
+  clipBytes: function (text, max) {
+    var n = 0;
+    for (var i = 0; i < text.length; i++) {
+      var c = text.charCodeAt(i);
+      var pair = c >= 0xd800 && c <= 0xdbff && i + 1 < text.length;
+      var size = c < 0x80 ? 1 : c < 0x800 ? 2 : pair ? 4 : 3;
+      if (n + size > max) return text.slice(0, i);
+      n += size;
+      if (pair) i++;
+    }
+    return text;
+  },
 };
 // </inline>
 if (typeof module !== 'undefined' && module.exports) module.exports = Contract;
