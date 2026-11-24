@@ -119,10 +119,22 @@ test('every icon image has the size the screen table says, and every screen has 
   const header = fs.readFileSync(path.join(root, 'app/src/c/contract.h'), 'utf8');
   for (const screen of screens) {
     assert.ok(header.includes('#define ICON_SIZE ' + screen.icon), screen.name);
-    for (const icon of ['rocket', 'thumbs_up', 'music', 'tide']) {
+    for (const icon of ['rocket', 'music']) {
       const file = path.join(root, 'app/resources/images', icon + '_' + screen.name + '.png');
       assert.deepStrictEqual(pngSize(file), [screen.icon, screen.icon], icon + ' ' + screen.name);
     }
+  }
+});
+
+test('the vector animations are valid PDC files drawn in an 80 x 80 box and listed as resources', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'app/package.base.json'), 'utf8')).pebble;
+  for (const [name, file] of [['SENT_ANIM', 'sent_anim.pdc'], ['THUMBS_ANIM', 'thumbs_anim.pdc'], ['TIDE_ANIM', 'tide_anim.pdc']]) {
+    const bytes = fs.readFileSync(path.join(root, 'app/resources/images', file));
+    assert.strictEqual(bytes.toString('latin1', 0, 4), 'PDCS', file);
+    assert.strictEqual(bytes.readUInt32LE(4), bytes.length - 8, file + ' size field');
+    assert.deepStrictEqual([bytes.readInt16LE(10), bytes.readInt16LE(12)], [80, 80], file + ' view box');
+    assert.ok(bytes.readUInt16LE(16) > 1, file + ' has frames');
+    assert.ok(manifest.resources.media.some((m) => m.name === name && m.file === 'images/' + file), name);
   }
 });
 
