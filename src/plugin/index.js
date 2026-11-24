@@ -204,6 +204,7 @@ async function permissionState(host) {
 
 // Sends a note or command and says what happened: { ok, status, message }. Never throws.
 async function deliver(destination, kind, value, doneText, extraHeaders) {
+  if (!destination) return { ok: false, status: 0, message: 'That webhook was removed. Choose another in the Webhook settings.' };
   var request = buildRequest(destination, kind, value, new Date(), extraHeaders);
   console.log('Webhook sending to ' + destination.host + ' with headers: ' + Object.keys(request.options.headers).join(', '));
   try {
@@ -282,61 +283,49 @@ function summary(config) {
   };
 }
 
-function fail(respond, result) {
-  respond.error(result.status === 401 || result.status === 403 ? 'AUTH_REQUIRED' : 'UNKNOWN', result.message);
+var SETUP_FIRST = 'Set your webhook URL in the Webhook plugin\'s settings first.';
+
+function failure(result) {
+  return { ok: false, code: result.status === 401 || result.status === 403 ? 'AUTH_REQUIRED' : 'UNKNOWN', message: result.message };
 }
 
-Pebble.registerActionHandler(async function (req, respond) {
+// What an action asks for, answered as { ok: true, text } or { ok: false, code, message }. Never throws.
+async function runAction(req) {
   var args = req.args || {};
   if (req.action === 'send_message') {
     var text = typeof args.text === 'string' ? args.text.trim() : '';
-    if (!text) {
-      respond.error('INVALID_ARGS', 'text must not be empty.');
-      return;
-    }
+    if (!text) return { ok: false, code: 'INVALID_ARGS', message: 'text must not be empty.' };
     if (text.length > Contract.LIMITS.TEXT) {
-      respond.error('INVALID_ARGS', 'That message is too long to send (limit ' + Contract.LIMITS.TEXT + ' characters).');
-      return;
+      return { ok: false, code: 'INVALID_ARGS', message: 'That message is too long to send (limit ' + Contract.LIMITS.TEXT + ' characters).' };
     }
     var config = await loadConfig();
-    if (!config) {
-      respond.error('AUTH_REQUIRED', 'Set your webhook URL in the Webhook plugin\'s settings first.');
-      return;
-    }
+    if (!config) return { ok: false, code: 'AUTH_REQUIRED', message: SETUP_FIRST };
     var result = await deliver(findDestination(config, config.noteDestination), 'text', text);
-    if (result.ok) respond.ok({ text: result.message });
-    else fail(respond, result);
-    return;
+    return result.ok ? { ok: true, text: result.message } : failure(result);
   }
   if (req.action === 'send_command') {
-    if (SLOTS.indexOf(args.slot) === -1) {
-      respond.error('INVALID_ARGS', 'Unknown button.');
-      return;
-    }
+    if (SLOTS.indexOf(args.slot) === -1) return { ok: false, code: 'INVALID_ARGS', message: 'Unknown button.' };
     var current = await loadConfig();
-    if (!current) {
-      respond.error('AUTH_REQUIRED', 'Set your webhook URL in the Webhook plugin\'s settings first.');
-      return;
-    }
+    if (!current) return { ok: false, code: 'AUTH_REQUIRED', message: SETUP_FIRST };
     var entry = current.commands[args.slot];
-    if (!entry) {
-      respond.error('INVALID_ARGS', 'No command set for that button.');
-      return;
-    }
+    if (!entry) return { ok: false, code: 'INVALID_ARGS', message: 'No command set for that button.' };
     var sent = await deliver(findDestination(current, entry.destination), 'command', entry.command, 'Sent ' + entry.command, entry.headers);
-    if (sent.ok) respond.ok({ text: sent.message });
-    else fail(respond, sent);
-    return;
+    return sent.ok ? { ok: true, text: sent.message } : failure(sent);
   }
   // Used by the watchapp to show the user's own reminders next to the Up and Down buttons.
   if (req.action === 'get_labels') {
     var stored = await loadConfig();
     var labels = stored && stored.labels ? stored.labels : { up: '', down: '' };
-    respond.ok({ text: JSON.stringify({ up: labels.up, down: labels.down }) });
-    return;
+    return { ok: true, text: JSON.stringify({ up: labels.up, down: labels.down }) };
   }
   console.error('Unsupported action: ' + req.action);
-  respond.error('PLUGIN_UNAVAILABLE', 'Unsupported Webhook action.');
+  return { ok: false, code: 'PLUGIN_UNAVAILABLE', message: 'Unsupported Webhook action.' };
+}
+
+Pebble.registerActionHandler(async function (req, respond) {
+  var result = await runAction(req);
+  if (result.ok) respond.ok({ text: result.text });
+  else respond.error(result.code, result.message);
 });
 
 Pebble.registerConfigHandler(async function (message, respond) {
@@ -391,5 +380,5 @@ Pebble.registerConfigHandler(async function (message, respond) {
 });
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseUrl: parseUrl, cleanHeaders: cleanHeaders, cleanConfig: cleanConfig, buildRequest: buildRequest, migrate: migrate };
+  module.exports = { runAction: runAction, parseUrl: parseUrl, cleanHeaders: cleanHeaders, cleanConfig: cleanConfig, buildRequest: buildRequest, migrate: migrate };
 }
