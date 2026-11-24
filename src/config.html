@@ -63,6 +63,13 @@
     footer { text-align: center; margin-top: 8px; }
     details { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; background: var(--bg); }
     summary { padding: 12px 14px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+    /* A chevron at the end of every expandable row: points down when closed, up when open. */
+    summary { align-items: center; }
+    summary::after { content: ""; flex: none; width: 8px; height: 8px; margin: 0 4px 3px 4px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); }
+    details[open] > summary::after { margin: 3px 4px 0 4px; transform: rotate(-135deg); }
+    @media (prefers-reduced-motion: no-preference) { summary::after { transition: transform .15s ease; } }
+    summary::-webkit-details-marker { display: none; }
+    summary small { margin-left: auto; }
     summary small { color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dest-body { padding: 0 14px 14px; }
     .dest-body input, .dest-body select { background: var(--card); }

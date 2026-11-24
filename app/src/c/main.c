@@ -120,14 +120,19 @@ static void prv_draw_mic(GContext *ctx, MicPose pose) {
   }
 }
 
-// Resting pose: turned 80 degrees, large, its head pointing toward the buttons and its base cut off by the left edge.
+// Resting pose: tilted 65 degrees, its head pointing up toward the buttons and its base cut off by the left edge.
+#define IDLE_ANGLE_DEG 65
+#define IDLE_HEAD_PERCENT 54
 static MicPose prv_idle_pose(GRect bounds) {
-  int head_edge = bounds.size.w * 62 / 100;
+  int head_edge = bounds.size.w * IDLE_HEAD_PERCENT / 100;
   int scale = head_edge * 20;
+  int32_t angle = DEG_TO_TRIGANGLE(IDLE_ANGLE_DEG);
+  // The head's far edge sits 27 units from the centre along the tilted axis.
+  int reach = 27 * scale / 1000;
   return (MicPose) {
-    .center = GPoint(head_edge - 27 * scale / 1000 * 985 / 1000, bounds.size.h / 2 + bounds.size.h * 4 / 100),
+    .center = GPoint(head_edge - reach * sin_lookup(angle) / TRIG_MAX_RATIO, bounds.size.h / 2),
     .scale_permille = scale,
-    .angle = DEG_TO_TRIGANGLE(80),
+    .angle = angle,
   };
 }
 

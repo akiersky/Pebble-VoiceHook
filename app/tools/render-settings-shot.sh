@@ -21,7 +21,7 @@ const sample = {
   },
   labels: { up: 'Lights', down: 'Garage' },
 };
-const stub = `<script>
+const stub = `<style>body { padding-top: 36px; }</style><script>
 window.Pebble = { sendMessage: function () { return Promise.resolve(${JSON.stringify(sample)}); },
   addEventListener: function (name, callback) { if (name === 'ready') setTimeout(function () { callback({ target: 'plugin' }); }, 0); } };
 </script>`;
@@ -30,5 +30,11 @@ fs.writeFileSync(process.argv[2], html);
 JS
 "$CHROME" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --window-size=500,1500 \
   --virtual-time-budget=3000 --screenshot=docs/images/settings.png "file://$TMP/page.html" 2>&1 | tail -1
-# Headless Chrome adds a blank strip under the page; cut it off (macOS).
-sips --cropToHeightWidth 2824 1000 docs/images/settings.png >/dev/null
+# Headless Chrome adds a blank strip under the page; trim it and the page content peeking out under the Save bar, keeping the top. Needs Pillow (PY=path to a python that has it).
+"${PY:-python3}" - <<'PYEOF'
+from PIL import Image, ImageChops
+image = Image.open('docs/images/settings.png').convert('RGB')
+page = Image.new('RGB', image.size, (244, 245, 248))      # the page's background colour
+box = ImageChops.difference(image, page).getbbox()
+image.crop((0, 0, image.width, box[3] - 8)).save('docs/images/settings.png')
+PYEOF

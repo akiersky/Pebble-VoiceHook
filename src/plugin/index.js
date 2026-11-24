@@ -262,7 +262,7 @@ async function permissionState(host) {
 async function deliver(destination, kind, value, doneText, extraHeaders) {
   if (!destination) return { ok: false, status: 0, message: 'That webhook was removed. Choose another in the ' + PRODUCT + ' settings.' };
   var request = buildRequest(destination, kind, value, new Date(), extraHeaders);
-  console.log(PRODUCT + ' sending to ' + destination.host + ' with headers: ' + Object.keys(request.options.headers).join(', '));
+  console.log(PRODUCT + ' sending to ' + destination.host + ' with headers (name, value length): ' + Object.keys(request.options.headers).map(function (name) { return name + ' ' + String(request.options.headers[name]).length; }).join(', '));
   try {
     var response = await fetch(request.url, request.options);
     if (response.status >= 200 && response.status < 300) {
