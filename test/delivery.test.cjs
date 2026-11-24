@@ -88,3 +88,17 @@ test('the watch can ask for the button reminders', async () => {
   const empty = await start();
   assert.deepStrictEqual(JSON.parse((await empty.action({ action: 'get_labels', args: {} })).text), { up: '', down: '', configured: false });
 });
+
+test('each sending action answers at most one request a second', async () => {
+  const t = await start({ rateLimit: 1000 });
+  t.type(t.document.querySelector('#destinations input[type=url]'), 'https://x.test/h');
+  t.type(t.document.querySelector('#commandsUp .command input[placeholder="e.g. lights_off"]'), 'go');
+  await t.click(t.document.querySelector('#save'));
+  assert.ok((await t.action({ action: 'send_message', args: { text: 'one' } })).ok);
+  const second = await t.action({ action: 'send_message', args: { text: 'two' } });
+  assert.strictEqual(second.ok, false);
+  assert.match(second.message, /Too many requests/);
+  assert.strictEqual(t.fetches.length, 1, 'the refused message was not sent');
+  assert.ok((await t.action({ action: 'send_command', args: { slot: 'up_single' } })).ok, 'another action has its own allowance');
+  assert.strictEqual((await t.action({ action: 'send_message', args: { text: '   ' } })).code, 'INVALID_ARGS', 'invalid requests do not use the allowance');
+});

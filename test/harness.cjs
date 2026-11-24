@@ -29,7 +29,7 @@ async function start(options) {
   };
   const pluginPath = require.resolve('../src/plugin/index.js');
   delete require.cache[pluginPath];
-  require(pluginPath);
+  require(pluginPath).setRateLimit(options.rateLimit || 0);   // tests send in quick bursts unless they ask otherwise
 
   let ready;
   let html = fs.readFileSync(path.join(__dirname, '..', 'src', 'config.html'), 'utf8');

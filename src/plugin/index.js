@@ -51,6 +51,16 @@ var LEGACY_KEY = 'webhook.config.v1';
 var SLOTS = Contract.SLOTS.map(function (slot) { return slot.id; });
 var FORBIDDEN_HEADERS = ['host', 'content-length', 'connection', 'transfer-encoding', 'cookie'];
 var RESERVED_FIELDS = ['timestamp', 'source', 'command'];
+// Any installed app can call this plugin, so each sending action answers at most one request a second.
+var RATE_LIMIT_MS = 1000;
+var lastSent = Object.create(null);
+function tooFast(action) {
+  var now = Date.now();
+  if (lastSent[action] !== undefined && now - lastSent[action] < RATE_LIMIT_MS) return true;
+  lastSent[action] = now;
+  return false;
+}
+var TOO_FAST = { ok: false, code: 'UNKNOWN', message: 'Too many requests. Wait a second and try again.' };
 
 function stringValue(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -343,6 +353,7 @@ async function runAction(req) {
     }
     var config = await loadConfig();
     if (!config) return { ok: false, code: 'AUTH_REQUIRED', message: SETUP_FIRST };
+    if (tooFast('send_message')) return TOO_FAST;
     var result = await deliver(findDestination(config, config.noteDestination), 'text', text);
     return result.ok ? { ok: true, text: result.message } : failure(result);
   }
@@ -352,6 +363,7 @@ async function runAction(req) {
     if (!current) return { ok: false, code: 'AUTH_REQUIRED', message: SETUP_FIRST };
     var entry = current.commands[args.slot];
     if (!entry) return { ok: false, code: 'INVALID_ARGS', message: 'No command set for that button.' };
+    if (tooFast('send_command')) return TOO_FAST;
     var sent = await deliver(findDestination(current, entry.destination), 'command', entry.command, 'Sent ' + entry.command, entry.headers);
     return sent.ok ? { ok: true, text: sent.message } : failure(sent);
   }
@@ -425,5 +437,5 @@ Pebble.registerConfigHandler(async function (message, respond) {
 });
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { runAction: runAction, parseUrl: parseUrl, cleanHeaders: cleanHeaders, cleanConfig: cleanConfig, buildRequest: buildRequest, migrate: migrate };
+  module.exports = { runAction: runAction, parseUrl: parseUrl, cleanHeaders: cleanHeaders, cleanConfig: cleanConfig, buildRequest: buildRequest, migrate: migrate, setRateLimit: function (ms) { RATE_LIMIT_MS = ms; } };
 }

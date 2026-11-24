@@ -11,6 +11,7 @@ For watch app developers and tinkerers: this plugin gives any Pebble app a ready
 Actions other apps can call (with Pebble.invokeAction):
 - send_message { text }: POST the text to the voice-note webhook.
 - send_command { slot }: POST one of six configured commands (up/down: press, double press, hold) to its webhook.
+Callers can't read headers or choose a host: everything goes to the webhooks the user set up. Each action answers at most one request per second, and redirects are not followed.
 
 SET UP
 1. Open Webhook's settings in the Pebble app and add one or more webhooks: URL, optional headers, JSON or plain-text body.
