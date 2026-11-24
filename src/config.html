@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Webhook</title>
+  <title>VoiceHook</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -88,9 +88,9 @@
 <body>
   <main>
     <header>
-      <div class="logo" aria-hidden="true">W</div>
+      <div class="logo" aria-hidden="true">V</div>
       <div>
-        <h1>Webhook</h1>
+        <h1>VoiceHook</h1>
         <p id="summary">Send notes from your watch to any URL.</p>
       </div>
     </header>
@@ -620,7 +620,7 @@ var Contract = {
     applyProduct();
 
     function permissionNote(permission, host) {
-      if (permission === 'denied') return ' Webhook is blocked from ' + host + '. Allow it under the plugin\'s Permissions.';
+      if (permission === 'denied') return ' VoiceHook is blocked from ' + host + '. Allow it under the plugin\'s Permissions.';
       return '';
     }
 
@@ -700,7 +700,7 @@ var Contract = {
         if (test.error) { setStatus(test.error, 'error'); return; }
         setStatus(labelFor(testId) + ': ' + test.message + (test.ok ? ' It is set up.' : permissionNote(test.permission, test.host)), test.ok ? 'ok' : 'error');
       } catch (error) {
-        setStatus('Could not contact the Webhook plugin. Try reopening this page.', 'error');
+        setStatus('Could not contact the VoiceHook plugin. Try reopening this page.', 'error');
       } finally { setBusy(false); restoreFocus(trigger, saveButton); }
     }
 
@@ -717,7 +717,7 @@ var Contract = {
         var result = await send({ type: Contract.MESSAGES.PIN });
         setStatus(result.error || result.message, result.error ? 'error' : 'ok');
       } catch (error) {
-        setStatus('Could not contact the Webhook plugin. Try reopening this page.', 'error');
+        setStatus('Could not contact the VoiceHook plugin. Try reopening this page.', 'error');
       } finally { setBusy(false); restoreFocus(pinButton, saveButton); }
     };
 

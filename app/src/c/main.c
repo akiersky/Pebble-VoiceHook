@@ -1,5 +1,5 @@
-// Webhook watchapp. Select dictates a note, Up/Down send fixed commands (press, double press, hold).
-// Everything is relayed to the phone over AppMessage; the phone side calls the bundled Webhook plugin.
+// VoiceHook watchapp. Select dictates a note, Up/Down send fixed commands (press, double press, hold).
+// Everything is relayed to the phone over AppMessage; the phone side calls the bundled VoiceHook plugin.
 // Launched from a Quick Launch button, it starts dictating at once and closes after the confirmation.
 // The app closes by itself after a minute with nothing happening.
 #include <pebble.h>
@@ -330,7 +330,7 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
     case StateIdle:
       if (s_setup_needed) {
         graphics_context_set_text_color(ctx, GColorBlack);
-        graphics_draw_text(ctx, "Set up Webhook in the phone app", fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD),
+        graphics_draw_text(ctx, "Set up VoiceHook in the phone app", fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD),
                            GRect(12, bounds.size.h / 2 - 56, bounds.size.w - 24, 112),
                            GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
         break;
@@ -587,7 +587,7 @@ static void prv_dictation(DictationSession *session, DictationSessionStatus stat
 static void prv_start_dictation(void) {
   if (s_state == StateSending || s_state == StateStarting) return;
   if (s_setup_needed) {
-    prv_show(StateFail, "Set up Webhook on your phone first");
+    prv_show(StateFail, "Set up VoiceHook on your phone first");
     return;
   }
   prv_activity();
@@ -623,7 +623,7 @@ static void prv_command(int slot) {
   prv_activity();
   if (s_state == StateSending || s_state == StateStarting) return;
   if (s_setup_needed) {
-    prv_show(StateFail, "Set up Webhook on your phone first");
+    prv_show(StateFail, "Set up VoiceHook on your phone first");
     return;
   }
   prv_send(NULL, slot);

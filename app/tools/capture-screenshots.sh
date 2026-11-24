@@ -2,7 +2,7 @@
 # Takes the appstore screenshots from the emulator, at each display's exact size, into store-assets/watch:
 #   tools/capture-screenshots.sh basalt chalk emery gabbro diorite flint
 # It builds a screenshot-only version of the app (SCREENSHOT_MODE=1, see src/c/main.c) in which a RESULT of 10 + n
-# shows confirmation icon n and keeps it on screen, then photographs each icon at rest. The normal build is
+# shows confirmation icon n and keeps it on screen, then photographs the main screen and the paper plane in flight (the store needs just those two). The normal build is
 # restored when the script ends, however it ends. Message key numbers are read from the build
 # (build/src/message_keys.auto.c). The app closes after a minute idle, so each platform is photographed right
 # after launching it.
@@ -52,8 +52,5 @@ for P in "$@"; do
   sleep 1
   pebble screenshot --emulator "$P" --no-open "$OUT/${P}_idle.png" 2>&1 | q >/dev/null
   result "$P" plane 140 "Sent to example.com."   # 100 + 40: the paper plane 40% through its animation
-  result "$P" thumbs 11 "Sent lights_off"
-  result "$P" shaka 13 "Sent garage_open"
-  result "$P" rock 12 "Sent party_mode"
   echo "$P done"
 done

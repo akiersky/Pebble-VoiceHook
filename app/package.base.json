@@ -1,5 +1,5 @@
 {
-  "name": "webhook-app",
+  "name": "voicehook",
   "author": "kiersky",
   "version": "0.1.10",
   "keywords": [
@@ -8,7 +8,7 @@
   "private": true,
   "dependencies": {},
   "pebble": {
-    "displayName": "Webhook",
+    "displayName": "VoiceHook",
     "uuid": "c0756590-bd59-464d-82f3-acd4499077d4",
     "sdkVersion": "3",
     "enableMultiJS": true,
@@ -33,7 +33,7 @@
     "usesPermissions": [
       {
         "name": "InvokeAction",
-        "reason": "To send your notes and button commands through the Webhook plugin",
+        "reason": "To send your notes and button commands through the VoiceHook plugin",
         "required": true
       }
     ]

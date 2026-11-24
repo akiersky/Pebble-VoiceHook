@@ -1,4 +1,4 @@
-// Relays the watchapp's requests to the Webhook plugin bundled in this same pbw.
+// Relays the watchapp's requests to the VoiceHook plugin bundled in this same pbw.
 // A bundled plugin shares the pbw's uuid, so this must match "uuid" in package.base.json.
 var PLUGIN_UUID = 'c0756590-bd59-464d-82f3-acd4499077d4';
 // ---- shared contract: generated from src/contract.js by `npm run contract`, do not edit ----
@@ -82,6 +82,6 @@ Pebble.addEventListener('appmessage', function (event) {
     reply(result.ok, result.ok ? result.text : result.message);
   }, function (error) {
     console.error('invokeAction failed: ' + (error && error.name) + ' ' + (error && error.message));
-    reply(false, 'Webhook plugin unavailable');
+    reply(false, 'VoiceHook plugin unavailable');
   });
 });

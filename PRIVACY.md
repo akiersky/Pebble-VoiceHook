@@ -1,8 +1,8 @@
 # Privacy
 
-Webhook sends what you tell it to send, to the URLs you give it, and nothing else.
+VoiceHook sends what you tell it to send, to the URLs you give it, and nothing else.
 
-- **Where data goes:** only to the webhook URLs you enter in the settings. Webhook has no server of its own,
+- **Where data goes:** only to the webhook URLs you enter in the settings. VoiceHook has no server of its own,
   no accounts, no analytics and no tracking. The developer receives nothing.
 - **What is sent:** the text you dictate (or the command you chose for a button), the time, and the word
   `pebble`, as a POST request with the headers you set.
@@ -13,9 +13,9 @@ Webhook sends what you tell it to send, to the URLs you give it, and nothing els
 - **Other apps:** any app you install can ask the plugin to send a note or one of your button commands. It goes only
   to the webhooks you set up, with your headers. The app never sees the headers or the URL and can't pick another
   address. Each action answers at most one request per second.
-- **Permissions:** your phone asks you to allow Webhook to connect to each host the first time it is used. You
+- **Permissions:** your phone asks you to allow VoiceHook to connect to each host the first time it is used. You
   can withdraw that in the plugin's permissions.
-- **Voice:** dictation is done by your phone's and watch's own speech recognition. Webhook only receives the
+- **Voice:** dictation is done by your phone's and watch's own speech recognition. VoiceHook only receives the
   resulting text.
 - **Logs:** the plugin may log the host name and the names (never the values) of the headers it sends, on your
   phone only.

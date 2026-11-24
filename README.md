@@ -1,59 +1,67 @@
-# Webhook: a Pebble plugin
+<p align="center"><img src="app/store-assets/banner.png" alt="VoiceHook" width="720"></p>
 
-Sends text from your Pebble to a URL you choose, as an HTTP POST with the headers you set.
-Generic by design: it knows nothing about any particular server or note system.
+**VoiceHook sends voice notes and button presses from your Pebble to any URL you choose.** Press Select, say your
+note, and it arrives as an HTTP POST at your own server, home automation or note system, with the headers you set.
+Up and Down send fixed commands, six in all.
 
-## How it works
-- Settings page (opened from the plugin in the Pebble app): URL, header name/value rows,
-  message format (JSON or plain text), a **Send test message** button, and **Clear settings**.
-- The URL and header values are stored together in `Pebble.secureStorage` (encrypted by the phone's keystore).
-  The settings page only gets the host and header names back, never the values.
-- Action `send_message { text }` does:
-  `POST <url>` with your headers and body `{"text": "...", "timestamp": "<ISO>", "source": "pebble"}`
-  (field name configurable) or the raw text.
-- 2xx means success. 401/403 reports an auth problem. A blocked host reports a permission problem.
+It has no server, no account and no analytics: messages go only to the webhooks you enter.
 
-## Status
-Early. Unit tests pass (`npm test`). Builds to `build/pebble-webhook.pbw` with pebble-tool 5.2.0 / SDK 4.44. Installed and tested on an Android phone (Pixel 7).
+<table>
+<tr>
+<td align="center" valign="top"><img src="docs/images/watch.png" alt="The VoiceHook watch screen, and the confirmation after a note is sent" width="460"><br><sub>On the watch: ready, and sent</sub></td>
+<td align="center" valign="top"><img src="docs/images/settings.png" alt="The VoiceHook settings page in the Pebble app" width="220"><br><sub>Settings, in the Pebble app</sub></td>
+</tr>
+</table>
 
-Findings from testing on Android (2026-11-23):
-1. A host typed in settings works with no `Internet` domain declared. The phone asks the user to allow
-   the host the first time it is used (tested against webhook.site). CONFIRMED.
-2. Custom request headers arrive at the receiver, along with the JSON body (`text`, `timestamp`, `source`). CONFIRMED.
-3. Triggering `send_message` from the watch: a timeline pin inserted by the plugin
-   (`Pebble.insertTimelinePin`, action `{type: 'pluginAction', action: 'send_message', inputArg: 'text'}`)
-   works. The watch prompts for dictation and the dictated text arrives as `text` in the POST. CONFIRMED.
-   The settings page has an "Add Send note pin" button to create it.
-4. Install: `pebble install build/pebble-webhook.pbw --adb` (file first; `--adb` takes an optional device
-   serial and otherwise swallows the path). Needs Android wireless debugging paired with `adb pair`.
-   Publish with `pebble publish` when ready.
+## What you get
+- **Voice notes.** Select starts dictation; the text is sent as JSON or plain text.
+- **Six button commands.** Up and Down, each as a press, a double press or a hold, each to the webhook you pick, with
+  optional extra headers.
+- **Several webhooks**, each with its own URL, headers and format.
+- **Reminders on the watch:** your own words next to the Up and Down buttons, with an arrow at each.
+- **Quick Launch:** put VoiceHook on a Quick Launch button to start a note from anywhere. It closes by itself.
+- **A plugin other apps can use** to send to your webhooks (below).
 
-## Watchapp (`app/`)
-`app/` is the same plugin bundled with a small watchapp: Select dictates a note, Up and Down send
-fixed commands (press, double press, hold). Assign it to a Quick Launch button on the watch to start a voice
-note from anywhere; it then starts dictating at once and closes after the confirmation. It also closes after a
-minute of nothing.
+## Set up
+1. Open VoiceHook's settings in the Pebble app and paste your webhook's URL.
+2. Add a header if it needs one, such as `Authorization`.
+3. Tap **Save & send test message** and allow the connection when your phone asks.
 
-Build it with `app/sync.sh` and then `pebble build` inside `app/`. `app/sync.js` copies the plugin and the
-settings page in and writes `app/package.json` (plugin block, permissions, message keys, target platforms and
-per-screen icon resources). The build stops with "out of date" if you forget.
-Icons are from https://github.com/pebble-dev/iconography (Apache 2.0), see `app/resources/images/ATTRIBUTION.md`.
+Then press Select on the watch and talk. Set the six button commands on the same page.
 
-## One place for each fact
-- `src/contract.js`: message names, limits, error-target vocabulary, the six button slots and the
-  watch-to-phone message keys. `npm run contract` copies it into the plugin, the settings page, the phone-side
-  relay (`app/src/pkjs/index.js`), `app/src/c/contract.h` and the `slot` enum in `package.json`. A test fails
-  if any copy is stale.
-- `app/screens.json`: the watch screen sizes and the icon size for each. It drives the C `ICON_SIZE`, the
-  rendered images (`app/tools/render-art.py`), the manifest's target platforms and per-screen resources.
-- See `GLOSSARY.md` for the terms.
+## What your server receives
+A note: `POST <your URL>` with your headers and the body
+
+```json
+{ "text": "buy milk", "timestamp": "2026-11-24T10:15:00.000Z", "source": "pebble" }
+```
+
+A button command sends `{ "command": "lights_off", "timestamp": "...", "source": "pebble" }`. The field name for
+notes is configurable, or choose plain text and the body is just the message. A `2xx` answer counts as success.
+Redirects aren't followed, so use the final URL.
+
+## Use the plugin from your own app
+The plugin works on its own. Any Pebble app can call it with `Pebble.invokeAction`:
+
+```js
+Pebble.invokeAction({ plugin: '<plugin uuid>', action: 'send_message', args: { text: 'buy milk' } });
+Pebble.invokeAction({ plugin: '<plugin uuid>', action: 'send_command', args: { slot: 'up_single' } });
+```
+
+`send_message` posts to the voice-note webhook and `send_command` to the webhook set for that button
+(`up_single`, `up_double`, `up_hold`, `down_single`, `down_double`, `down_hold`). Callers can't read headers or choose
+an address: everything goes to the webhooks the user set up. Each action answers at most one request a second.
+The plugin's uuid is `020583bc-828e-454c-b579-de76d60ec3e6`; the watchapp bundles its own copy, which uses the
+watchapp's uuid.
+
+## Privacy
+Your URLs and header values are kept in the Pebble app's encrypted plugin storage on your phone, never shown again
+after you save them, and a saved value is only sent to the address it was saved for. See [PRIVACY.md](PRIVACY.md).
 
 ## Develop
-```
-npm test                                 # unit tests plus the real settings page against the real plugin
-export PATH=~/.venvs/pebble/bin:$PATH   # pebble-tool needs uv on PATH (pip install uv in the same venv)
-pebble build                             # SDK 4.44+, pebble-tool 5.1.0+
-pebble install --adb                     # Android over adb, or: pebble install --phone <ip>
-```
-Docs: https://developer.repebble.com/guides/plugins/preview/ and https://developer.repebble.com/guides/ai-agents/
-Reference plugin: https://github.com/coredevices/pebble-apps/tree/main/workflowy
+See [docs/DEVELOPING.md](docs/DEVELOPING.md) for the layout, building, testing and the tools. The words used in the
+code and the UI are in [GLOSSARY.md](GLOSSARY.md). To publish, follow [PUBLISHING.md](PUBLISHING.md).
+
+## Licence
+[MIT](LICENSE). The icons come from the [Pebble iconography](https://github.com/pebble-dev/iconography) set
+(Apache 2.0), see [app/resources/images/ATTRIBUTION.md](app/resources/images/ATTRIBUTION.md).

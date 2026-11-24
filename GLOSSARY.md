@@ -15,6 +15,6 @@
   to the plugin.
 - **Target**: the field of the settings page an error belongs to, so the page can mark it.
 - **Setup needed**: the phone tells the watch at launch whether anything is saved (`CONFIGURED`). If not, the
-  watch says "Set up Webhook in the phone app" instead of recording something that would only fail.
+  watch says "Set up VoiceHook in the phone app" instead of recording something that would only fail.
 - **Choose a webhook**: what a button or the voice note shows after its webhook was removed. It never moves to
   another webhook by itself, and Save is blocked until a webhook is chosen.

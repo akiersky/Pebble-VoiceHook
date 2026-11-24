@@ -1,13 +1,19 @@
 {
-  "name": "webhook",
+  "name": "voicehook-plugin",
   "author": "kiersky",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akiersky/Pebble-VoiceHook.git"
+  },
+  "homepage": "https://github.com/akiersky/Pebble-VoiceHook",
   "scripts": {
     "test": "node --test test/*.test.cjs",
     "contract": "node scripts/inline-contract.js"
   },
   "pebble": {
-    "displayName": "Webhook",
+    "displayName": "VoiceHook Plugin",
     "uuid": "020583bc-828e-454c-b579-de76d60ec3e6",
     "sdkVersion": "3",
     "usesPermissions": [
@@ -72,7 +78,7 @@
         },
         {
           "name": "get_labels",
-          "description": "Internal use by the Webhook watchapp: returns the button labels as JSON. Not for general use.",
+          "description": "Internal use by the VoiceHook watchapp: returns the button labels as JSON. Not for general use.",
           "parameters": {
             "type": "object",
             "properties": {},
