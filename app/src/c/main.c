@@ -14,6 +14,8 @@
 #define MIN_RESULT_SHOW_MS 1800
 #define FRAME_MS 33
 #define ICON_COUNT 5
+// The paper plane swoops in from the lower left before its own animation takes over.
+#define SENT_FLY_IN_MS 400
 
 // ICON_SIZE comes from contract.h, generated from screens.json, where each screen's size is set by hand.
 #define ICON_HALF (ICON_SIZE / 2)
@@ -32,6 +34,8 @@ static int s_freeze_percent = -1;   // RESULT 100 + n: hold the plane animation 
 #endif
 
 typedef enum { StateIdle, StateStarting, StateSending, StateOk, StateFail } State;
+// IconSent (the paper plane, a vector animation) must stay last: it is the voice note's icon, and button
+// commands pick at random from the ones before it.
 typedef enum { IconRocket, IconThumbsUp, IconMusic, IconTide, IconSent } Icon;
 
 static Window *s_window;
@@ -44,7 +48,7 @@ static AppTimer *s_timeout_timer;
 static AppTimer *s_idle_timer;
 // Only the picture being shown is loaded, to keep memory low on the older watches.
 static GBitmap *s_confirm_bitmap;
-static GDrawCommandSequence *s_sent_sequence;
+static GDrawCommandSequence *s_sequence;
 static State s_state = StateIdle;
 static Icon s_confirm = IconThumbsUp;
 static int32_t s_anim_ms = ICON_ANIMATION_MS;
@@ -302,13 +306,26 @@ static void prv_draw_confirm(GContext *ctx, GPoint center, int32_t elapsed) {
       prv_draw_icon(ctx, center, prv_swing(t, 4, 22, 60));
       break;
     case IconSent:
-      if (s_sent_sequence) {
-        int32_t last = (int32_t)gdraw_command_sequence_get_total_duration(s_sent_sequence) - 1;
+      if (s_sequence) {
+        // The plane first flies in, then its own animation plays.
+        int32_t fly_in = SENT_FLY_IN_MS;
+        int32_t last = (int32_t)gdraw_command_sequence_get_total_duration(s_sequence) - 1;
+        int32_t play = t - fly_in;
 #if defined(SCREENSHOT_MODE)
-        if (s_freeze_percent >= 0) t = last * s_freeze_percent / 100;
+        if (s_freeze_percent >= 0) play = last * s_freeze_percent / 100;
 #endif
-        GDrawCommandFrame *frame = gdraw_command_sequence_get_frame_by_elapsed(s_sent_sequence, t < last ? t : last);
-        if (frame) gdraw_command_frame_draw(ctx, s_sent_sequence, frame, GPoint(center.x - ICON_HALF, center.y - ICON_HALF));
+        GPoint origin = GPoint(center.x - ICON_HALF, center.y - ICON_HALF);
+        if (play < 0) {
+          // Ease-out from below and to the left of the screen onto the animation's first pose.
+          int32_t u = 1000 + play * 1000 / SENT_FLY_IN_MS;
+          int32_t left = 1000 - u;
+          int32_t remaining = left * left / 1000 * left / 1000;
+          origin.x -= (center.x + ICON_HALF) * remaining / 1000;
+          origin.y += (center.y + ICON_HALF) * remaining / 1000;
+          play = 0;
+        }
+        GDrawCommandFrame *frame = gdraw_command_sequence_get_frame_by_elapsed(s_sequence, play < last ? play : last);
+        if (frame) gdraw_command_frame_draw(ctx, s_sequence, frame, origin);
       }
       break;
   }
@@ -410,7 +427,7 @@ static void prv_scale_sequence(GDrawCommandSequence *sequence) {
 
 static void prv_free_confirm(void) {
   if (s_confirm_bitmap) { gbitmap_destroy(s_confirm_bitmap); s_confirm_bitmap = NULL; }
-  if (s_sent_sequence) { gdraw_command_sequence_destroy(s_sent_sequence); s_sent_sequence = NULL; }
+  if (s_sequence) { gdraw_command_sequence_destroy(s_sequence); s_sequence = NULL; }
 }
 
 // A voice note always gets the paper plane. A button command gets one of the others, never the same as last time.
@@ -426,17 +443,17 @@ static void prv_pick_confirm(bool voice_note) {
   }
   s_anim_ms = ICON_ANIMATION_MS;
   if (next == IconSent) {
-    s_sent_sequence = gdraw_command_sequence_create_with_resource(RESOURCE_ID_SENT_ANIM);
-    if (s_sent_sequence) {
-      prv_scale_sequence(s_sent_sequence);
-      s_anim_ms = (int32_t)gdraw_command_sequence_get_total_duration(s_sent_sequence);
+    s_sequence = gdraw_command_sequence_create_with_resource(RESOURCE_ID_SENT_ANIM);
+    if (s_sequence) {
+      prv_scale_sequence(s_sequence);
+      s_anim_ms = (int32_t)gdraw_command_sequence_get_total_duration(s_sequence) + SENT_FLY_IN_MS;
     } else {
       next = IconThumbsUp;
     }
   }
   if (next != IconSent) {
     s_confirm_bitmap = gbitmap_create_with_resource(ICON_RESOURCES[next]);
-    if (!s_confirm_bitmap) next = IconSent;
+    if (!s_confirm_bitmap) next = IconSent;   // (its animation then simply does not draw)
   }
   s_confirm = next;
 }
