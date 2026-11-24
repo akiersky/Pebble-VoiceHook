@@ -34,8 +34,8 @@ static int s_freeze_percent = -1;   // RESULT 100 + n: hold the plane animation 
 #endif
 
 typedef enum { StateIdle, StateStarting, StateSending, StateOk, StateFail } State;
-// Rocket and Music are pictures that the code moves and turns; ThumbsUp, Tide and Sent are vector animations (PDC).
-// IconSent must stay last: it is the voice note's icon, and button commands pick at random from the ones before it.
+// All five are vector animations (PDC, made by tools/make-pdc.py). IconSent must stay last: it is the voice
+// note's icon, and button commands pick at random from the ones before it.
 typedef enum { IconRocket, IconThumbsUp, IconMusic, IconTide, IconSent } Icon;
 
 static Window *s_window;
@@ -47,7 +47,6 @@ static AppTimer *s_reset_timer;
 static AppTimer *s_timeout_timer;
 static AppTimer *s_idle_timer;
 // Only the picture being shown is loaded, to keep memory low on the older watches.
-static GBitmap *s_confirm_bitmap;
 static GDrawCommandSequence *s_sequence;
 static State s_state = StateIdle;
 static Icon s_confirm = IconThumbsUp;
@@ -63,16 +62,9 @@ static char s_message[WIRE_MESSAGE_MAX + 1];
 static char s_up_label[LABEL_MAX];
 static char s_down_label[LABEL_MAX];
 
-static const uint32_t ICON_RESOURCES[ICON_COUNT] = {
-  RESOURCE_ID_IMAGE_ROCKET, 0, RESOURCE_ID_IMAGE_MUSIC, 0, 0,
-};
 static const uint32_t PDC_RESOURCES[ICON_COUNT] = {
-  0, RESOURCE_ID_THUMBS_ANIM, 0, RESOURCE_ID_TIDE_ANIM, RESOURCE_ID_SENT_ANIM,
+  RESOURCE_ID_ROCKET_ANIM, RESOURCE_ID_THUMBS_ANIM, RESOURCE_ID_MUSIC_ANIM, RESOURCE_ID_TIDE_ANIM, RESOURCE_ID_SENT_ANIM,
 };
-
-static bool prv_is_vector(Icon icon) {
-  return icon == IconThumbsUp || icon == IconTide || icon == IconSent;
-}
 
 // ---- the microphone, drawn in code so it can move, turn and grow. Coordinates are in half-units of the 80x80 artwork.
 typedef struct { int16_t x1, y1, x2, y2; uint8_t width; } MicLine;
@@ -191,13 +183,6 @@ static GColor prv_confirm_background(Icon icon) {
   }
 }
 
-// A swing that starts at +/-max_degrees, goes back and forth `swings` times and dies away by the end.
-static int32_t prv_swing(int32_t elapsed, int swings, int max_degrees, int decay_percent) {
-  int32_t angle = TRIG_MAX_ANGLE * swings * elapsed / s_anim_ms;
-  int32_t amplitude = 100 - decay_percent * elapsed / s_anim_ms;
-  return sin_lookup(angle) * DEG_TO_TRIGANGLE(max_degrees) / TRIG_MAX_RATIO * amplitude / 100;
-}
-
 #if defined(PBL_ROUND)
 static int prv_isqrt(int value) {
   int root = 0;
@@ -253,40 +238,13 @@ static void prv_draw_cross(GContext *ctx, GPoint center, int size, int32_t elaps
   graphics_draw_line(ctx, GPoint(center.x + half, center.y - half), GPoint(center.x - half, center.y + half));
 }
 
-static void prv_draw_icon(GContext *ctx, GPoint at, int32_t angle) {
-  if (angle == 0) {
-    graphics_draw_bitmap_in_rect(ctx, s_confirm_bitmap, GRect(at.x - ICON_HALF, at.y - ICON_HALF, ICON_SIZE, ICON_SIZE));
-  } else {
-    graphics_draw_rotated_bitmap(ctx, s_confirm_bitmap, GPoint(ICON_HALF, ICON_HALF), angle, at);
-  }
-}
-
-// Each confirmation icon has its own motion.
+// Each confirmation icon plays its own animation.
 static void prv_draw_confirm(GContext *ctx, GPoint center, int32_t elapsed) {
   int32_t t = elapsed < s_anim_ms ? elapsed : s_anim_ms;
   switch (s_confirm) {
-    case IconRocket: {
-      // Rumbles on the pad, then blasts off toward the top right and out of sight.
-      GPoint at = center;
-      if (t < 300) {
-        at.x += (t / 45) % 2 ? 3 : -3;
-        at.y += (t / 30) % 2 ? 2 : -2;
-      } else if (t < 1000) {
-        int32_t u = t - 300;
-        int dist = u * u / 2200 * ICON_SIZE / 80;
-        at.x += dist * 7 / 10;
-        at.y -= dist * 7 / 10;
-      } else {
-        return;
-      }
-      prv_draw_icon(ctx, at, 0);
-      break;
-    }
-    case IconMusic:
-      // Rocking side to side to the beat, hopping on each swing.
-      prv_draw_icon(ctx, GPoint(center.x, center.y - abs(prv_swing(t, 5, 10, 50)) / 400), prv_swing(t, 5, 14, 50));
-      break;
+    case IconRocket:
     case IconThumbsUp:
+    case IconMusic:
     case IconTide:
     case IconSent:
       if (s_sequence) {
@@ -409,7 +367,6 @@ static void prv_scale_sequence(GDrawCommandSequence *sequence) {
 }
 
 static void prv_free_confirm(void) {
-  if (s_confirm_bitmap) { gbitmap_destroy(s_confirm_bitmap); s_confirm_bitmap = NULL; }
   if (s_sequence) { gdraw_command_sequence_destroy(s_sequence); s_sequence = NULL; }
 }
 
@@ -425,19 +382,11 @@ static void prv_pick_confirm(bool voice_note) {
     if (next == s_confirm) next = (Icon)((next + 1) % IconSent);
   }
   s_anim_ms = ICON_ANIMATION_MS;
-  if (prv_is_vector(next)) {
-    s_sequence = gdraw_command_sequence_create_with_resource(PDC_RESOURCES[next]);
-    if (s_sequence) {
-      prv_scale_sequence(s_sequence);
-      s_anim_ms = (int32_t)gdraw_command_sequence_get_total_duration(s_sequence) + (next == IconSent ? SENT_FLY_IN_MS : 0);
-    } else {
-      next = IconRocket;
-    }
-  }
-  if (!prv_is_vector(next)) {
-    s_confirm_bitmap = gbitmap_create_with_resource(ICON_RESOURCES[next]);
-    if (!s_confirm_bitmap) next = IconSent;   // (its animation then simply does not draw)
-  }
+  s_sequence = gdraw_command_sequence_create_with_resource(PDC_RESOURCES[next]);
+  if (s_sequence) {
+    prv_scale_sequence(s_sequence);
+    s_anim_ms = (int32_t)gdraw_command_sequence_get_total_duration(s_sequence) + (next == IconSent ? SENT_FLY_IN_MS : 0);
+  }   // (if it cannot be loaded, the coloured screen and the message still say it was sent)
   s_confirm = next;
 }
 

@@ -3,12 +3,12 @@
 The icons in this folder are from https://github.com/pebble-dev/iconography (Apache License 2.0):
 
 - `thumbs_anim.pdc`: the shapes of `pebbleos/Pebble_80x80_Thumbs_up.svg`, animated for this project by `tools/make-pdc.py`
-- `music.png`: `pebbleos/Pebble_80x80_Music_event.svg`
+- `music_anim.pdc`: the shapes of `pebbleos/Pebble_80x80_Music_event.svg`, animated for this project by `tools/make-pdc.py`
 - `tide_anim.pdc`: the shapes of `pebbleos/Pebble_80x80_Tide_is_high.svg`, animated for this project by `tools/make-pdc.py`
 - `sent_anim.pdc`: `pebbleos/animated_pdcs/Pebble_80x80_Sent.pdc` (unchanged)
-- `rocket.png`: `icons/80px_Rocket.svg` (Rebble community)
+- `rocket_anim.pdc`: the shapes of `icons/80px_Rocket.svg` (Rebble community), animated for this project by `tools/make-pdc.py`
 
-They were rasterized to PNGs at a size for each watch screen (see `tools/render-art.py`); narrower ones were padded to a square. No other changes.
+The shapes were turned into frame-by-frame vector animations by `tools/make-pdc.py` (the paper plane is Pebble's own animation, unchanged); the drawings themselves are not altered.
 Pebble OS icons are by Pebble Technology Corp.; the Apache 2.0 license text is at
 https://www.apache.org/licenses/LICENSE-2.0 and in the iconography repository's LICENSE file.
 

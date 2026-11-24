@@ -109,36 +109,28 @@ test('the watchapp build takes its plugin block and message keys from the contra
 
 const appSync = require('../app/sync.js');
 
-function pngSize(file) {
-  const bytes = fs.readFileSync(file);
-  return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
-}
-
-test('every icon image has the size the screen table says, and every screen has all of them', () => {
+test('every screen the table lists has an ICON_SIZE in the generated header', () => {
   const screens = JSON.parse(fs.readFileSync(path.join(root, 'app/screens.json'), 'utf8'));
   const header = fs.readFileSync(path.join(root, 'app/src/c/contract.h'), 'utf8');
-  for (const screen of screens) {
-    assert.ok(header.includes('#define ICON_SIZE ' + screen.icon), screen.name);
-    for (const icon of ['rocket', 'music']) {
-      const file = path.join(root, 'app/resources/images', icon + '_' + screen.name + '.png');
-      assert.deepStrictEqual(pngSize(file), [screen.icon, screen.icon], icon + ' ' + screen.name);
-    }
-  }
+  for (const screen of screens) assert.ok(header.includes('#define ICON_SIZE ' + screen.icon), screen.name);
 });
 
 test('the vector animations are valid PDC files drawn in an 80 x 80 box and listed as resources', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'app/package.base.json'), 'utf8')).pebble;
-  for (const [name, file] of [['SENT_ANIM', 'sent_anim.pdc'], ['THUMBS_ANIM', 'thumbs_anim.pdc'], ['TIDE_ANIM', 'tide_anim.pdc']]) {
+  const code = fs.readFileSync(path.join(root, 'app/src/c/main.c'), 'utf8');
+  for (const [name, file] of [['SENT_ANIM', 'sent_anim.pdc'], ['THUMBS_ANIM', 'thumbs_anim.pdc'], ['TIDE_ANIM', 'tide_anim.pdc'],
+                              ['ROCKET_ANIM', 'rocket_anim.pdc'], ['MUSIC_ANIM', 'music_anim.pdc']]) {
     const bytes = fs.readFileSync(path.join(root, 'app/resources/images', file));
     assert.strictEqual(bytes.toString('latin1', 0, 4), 'PDCS', file);
     assert.strictEqual(bytes.readUInt32LE(4), bytes.length - 8, file + ' size field');
     assert.deepStrictEqual([bytes.readInt16LE(10), bytes.readInt16LE(12)], [80, 80], file + ' view box');
     assert.ok(bytes.readUInt16LE(16) > 1, file + ' has frames');
     assert.ok(manifest.resources.media.some((m) => m.name === name && m.file === 'images/' + file), name);
+    assert.ok(code.includes('RESOURCE_ID_' + name), name + ' is used by the watch code');
   }
 });
 
-test('the watchapp manifest lists each screen platform and each icon resource once', () => {
+test('the watchapp manifest lists each screen platform and every resource file exists', () => {
   execFileSync('sh', [path.join(root, 'app/sync.sh')]);
   const app = JSON.parse(fs.readFileSync(path.join(root, 'app/package.json'), 'utf8')).pebble;
   const screens = JSON.parse(fs.readFileSync(path.join(root, 'app/screens.json'), 'utf8'));
@@ -148,12 +140,6 @@ test('the watchapp manifest lists each screen platform and each icon resource on
   for (const entry of app.resources.media) {
     assert.ok(fs.existsSync(path.join(root, 'app/resources', entry.file)), entry.file);
   }
-  const byPlatform = {};
-  for (const entry of app.resources.media.filter((e) => e.name === 'IMAGE_ROCKET')) {
-    for (const platform of entry.targetPlatforms) byPlatform[platform] = (byPlatform[platform] || 0) + 1;
-  }
-  assert.deepStrictEqual(Object.values(byPlatform).filter((n) => n !== 1), []);
-  assert.deepStrictEqual(Object.keys(byPlatform).sort(), [...app.targetPlatforms].sort());
 });
 
 test('a freshly synced watchapp is not stale, and a stale copy is noticed', () => {
