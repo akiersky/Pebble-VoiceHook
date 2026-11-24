@@ -350,3 +350,28 @@ test('the page goes by the plugin\'s name, or by the watchapp\'s name in the wat
   assert.strictEqual(app.document.querySelector('h1').textContent, 'VoiceHook');
   assert.strictEqual(app.document.querySelector('#logo').textContent, 'V');
 });
+
+test('header values are hidden until the eye is pressed, and a saved value stays hidden', async () => {
+  const t = await start();
+  const card = await fillBasic(t, 'https://x.test/h');
+  const row = card.querySelector('.header-row');
+  const value = row.children[1];
+  const eye = row.querySelector('button.reveal');
+  t.type(row.children[0], 'Authorization');
+  t.type(value, 'Bearer t');
+  assert.strictEqual(value.type, 'password');
+  assert.strictEqual(eye.getAttribute('aria-pressed'), 'false');
+  await t.click(eye);
+  assert.strictEqual(value.type, 'text');
+  assert.strictEqual(eye.getAttribute('aria-pressed'), 'true');
+  assert.strictEqual(eye.getAttribute('aria-label'), 'Hide header value');
+  await t.click(eye);
+  assert.strictEqual(value.type, 'password');
+
+  await t.click(t.document.querySelector('#save'));
+  const saved = t.document.querySelector('#destinations .header-row');
+  assert.strictEqual(saved.children[1].value, '', 'the saved value never comes back');
+  await t.click(saved.querySelector('button.reveal'));
+  assert.strictEqual(saved.children[1].type, 'password', 'nothing to show, so it stays hidden');
+  assert.match(t.document.querySelector('#status').textContent, /stays hidden/);
+});

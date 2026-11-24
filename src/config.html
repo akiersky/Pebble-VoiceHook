@@ -50,6 +50,10 @@
 
     .header-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 8px; }
     .header-row .remove { width: 44px; padding: 0; font-size: 1.25rem; line-height: 1; }
+    .header-row input:nth-child(2) { padding-right: 46px; }
+    /* The show/hide eye sits inside the value field: same grid cell, pushed to its right edge. */
+    button.reveal { grid-column: 2; grid-row: 1; justify-self: end; align-self: center; width: 40px; height: 40px; margin-right: 2px; padding: 0; display: grid; place-items: center; background: transparent; color: var(--muted); }
+    button.reveal svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
     button { font: inherit; font-size: 0.9375rem; font-weight: 600; padding: 12px 16px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-text); }
     button.secondary { background: var(--soft); color: var(--accent-ink); }
@@ -368,6 +372,25 @@ var Contract = {
       markDirty();
     }
 
+    // An eye (or a crossed-out eye) drawn with DOM methods, so no markup is ever built from strings.
+    function eyeIcon(slashed) {
+      var ns = 'http://www.w3.org/2000/svg';
+      var svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('aria-hidden', 'true');
+      var outline = document.createElementNS(ns, 'path');
+      outline.setAttribute('d', 'M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z');
+      var pupil = document.createElementNS(ns, 'circle');
+      pupil.setAttribute('cx', '12'); pupil.setAttribute('cy', '12'); pupil.setAttribute('r', '3');
+      svg.append(outline, pupil);
+      if (slashed) {
+        var slash = document.createElementNS(ns, 'path');
+        slash.setAttribute('d', 'M3 3l18 18');
+        svg.append(slash);
+      }
+      return svg;
+    }
+
     function addHeaderRow(box, name, hasValue) {
       var row = el('div', { className: 'header-row' });
       var nameInput = el('input', { type: 'text', maxLength: Contract.LIMITS.HEADER_NAME, placeholder: 'Name', autocapitalize: 'none', spellcheck: false, value: name || '' });
@@ -383,7 +406,24 @@ var Contract = {
         markDirty();
         if (neighbour) neighbour.children[0].focus();
       };
-      row.append(nameInput, valueInput, remove);
+      // Values are hidden by default. A saved value never comes back from the plugin, so only what is
+      // typed here can be shown.
+      var reveal = el('button', { type: 'button', className: 'reveal' });
+      reveal.setAttribute('aria-label', 'Show header value');
+      reveal.setAttribute('aria-pressed', 'false');
+      reveal.append(eyeIcon(false));
+      reveal.onclick = function () {
+        var show = valueInput.type === 'password';
+        if (show && !valueInput.value) {
+          setStatus(hasValue ? 'A saved value stays hidden. Type a new one to see it.' : 'Nothing typed in this field yet.');
+          return;
+        }
+        valueInput.type = show ? 'text' : 'password';
+        reveal.setAttribute('aria-pressed', String(show));
+        reveal.setAttribute('aria-label', show ? 'Hide header value' : 'Show header value');
+        reveal.replaceChildren(eyeIcon(show));
+      };
+      row.append(nameInput, valueInput, remove, reveal);
       box.appendChild(row);
     }
 
