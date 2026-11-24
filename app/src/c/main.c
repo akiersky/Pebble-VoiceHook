@@ -107,9 +107,9 @@ static void prv_draw_button_label(GContext *ctx, GRect bounds, int y, const char
   if (!text[0]) return;
   int edge = prv_edge_x(bounds, y);
   int left = PBL_IF_ROUND_ELSE(bounds.size.w / 5, 6);
-  GRect rect = GRect(left, y - 13, edge - 26 - left, 26);
+  GRect rect = GRect(left, y - 19, edge - 26 - left, 38);
   graphics_context_set_text_color(ctx, GColorBlack);
-  graphics_draw_text(ctx, text, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), rect,
+  graphics_draw_text(ctx, text, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD), rect,
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
   prv_draw_arrow(ctx, GPoint(edge - 20, y), GPoint(edge, y));
 }
@@ -182,7 +182,8 @@ static void prv_draw_confirm(GContext *ctx, GPoint center, int32_t elapsed) {
 // The big microphone image bleeds off the left edge; the arrow sits halfway between it and the Select button.
 static GRect prv_mic_rect(GRect bounds) {
   GRect image = gbitmap_get_bounds(s_mic);
-  return GRect(0, (bounds.size.h - image.size.h) / 2, image.size.w, image.size.h);
+  // A little below the middle, so it stays clear of the labels at the top and bottom.
+  return GRect(0, (bounds.size.h - image.size.h) / 2 + bounds.size.h * 4 / 100, image.size.w, image.size.h);
 }
 
 static void prv_canvas_update(Layer *layer, GContext *ctx) {
