@@ -2,12 +2,19 @@
 // The whole configuration (destinations, header values) lives in secureStorage, because webhook URLs
 // and headers often carry tokens. The settings page only ever sees hosts and header names back.
 
+// ---- shared contract: generated from src/contract.js by `npm run contract`, do not edit ----
+var Contract = {
+  MESSAGES: { STATUS: 'status', SAVE: 'save', TEST: 'test', PIN: 'pin', UNLINK: 'unlink' },
+  LIMITS: { HEADERS: 10, DESTINATIONS: 10, LABEL: 24, COMMAND: 100, HEADER_VALUE: 2000, TEXT: 8000, NAME: 40 },
+  TARGETS: { DESTINATION: 'destination', COMMAND: 'command', NOTE: 'note', LABEL: 'label' },
+  FIELDS: { URL: 'url', HEADERS: 'headers', JSON_FIELD: 'field', COMMAND: 'command', DESTINATION: 'destination', UP: 'up', DOWN: 'down' },
+  PARTS: { NAME: 'name', VALUE: 'value' },
+};
+// ---- end shared contract ----
+
 var CONFIG_KEY = 'webhook.config.v2';
 var LEGACY_KEY = 'webhook.config.v1';
-var MAX_HEADERS = 10;
-var MAX_DESTINATIONS = 10;
 var SLOTS = ['up_single', 'up_double', 'up_hold', 'down_single', 'down_double', 'down_hold'];
-var MAX_TEXT = 8000;
 var FORBIDDEN_HEADERS = ['host', 'content-length', 'connection', 'transfer-encoding', 'cookie'];
 var RESERVED_FIELDS = ['timestamp', 'source'];
 
@@ -30,26 +37,26 @@ function parseUrl(value) {
 // saved one", unless `hostChanged`: those values were saved for another host and must not follow the URL.
 function cleanHeaders(raw, previous, hostChanged) {
   var list = Array.isArray(raw) ? raw : [];
-  if (list.length > MAX_HEADERS) return { error: 'At most ' + MAX_HEADERS + ' headers.' };
+  if (list.length > Contract.LIMITS.HEADERS) return { error: 'At most ' + Contract.LIMITS.HEADERS + ' headers.' };
   var seen = Object.create(null);
   var out = [];
   for (var i = 0; i < list.length; i++) {
     var name = stringValue(list[i] && list[i].name);
     if (!name) continue;
-    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) return { error: 'Header "' + name + '" is not a valid header name.', index: i, part: 'name' };
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) return { error: 'Header "' + name + '" is not a valid header name.', index: i, part: Contract.PARTS.NAME };
     var lower = name.toLowerCase();
-    if (FORBIDDEN_HEADERS.indexOf(lower) !== -1) return { error: 'The ' + name + ' header can\'t be set.', index: i, part: 'name' };
-    if (seen[lower]) return { error: 'Header "' + name + '" appears twice.', index: i, part: 'name' };
+    if (FORBIDDEN_HEADERS.indexOf(lower) !== -1) return { error: 'The ' + name + ' header can\'t be set.', index: i, part: Contract.PARTS.NAME };
+    if (seen[lower]) return { error: 'Header "' + name + '" appears twice.', index: i, part: Contract.PARTS.NAME };
     seen[lower] = true;
     var value = typeof list[i].value === 'string' ? list[i].value : '';
     if (!value && previous) {
       var kept = previous.filter(function (header) { return header.name.toLowerCase() === lower; })[0];
       if (kept && kept.value && hostChanged) {
-        return { error: 'Enter the value of ' + name + ' again. The host changed, so the saved value isn\'t sent to the new one.', index: i, part: 'value' };
+        return { error: 'Enter the value of ' + name + ' again. The host changed, so the saved value isn\'t sent to the new one.', index: i, part: Contract.PARTS.VALUE };
       }
       if (kept) value = kept.value;
     }
-    if (/[\r\n]/.test(value) || value.length > 2000) return { error: 'The value of ' + name + ' is not valid.', index: i, part: 'value' };
+    if (/[\r\n]/.test(value) || value.length > Contract.LIMITS.HEADER_VALUE) return { error: 'The value of ' + name + ' is not valid.', index: i, part: Contract.PARTS.VALUE };
     out.push({ name: name, value: value });
   }
   return { headers: out };
@@ -59,18 +66,18 @@ function cleanHeaders(raw, previous, hostChanged) {
 function cleanDestination(raw, previous) {
   var id = stringValue(raw && raw.id);
   if (!/^[A-Za-z0-9_-]{1,20}$/.test(id)) return { error: 'A destination has an invalid id.' };
-  var name = stringValue(raw.name).slice(0, 40) || 'Webhook';
-  var at = function (field, extra) { return Object.assign({ kind: 'destination', id: id, field: field }, extra); };
+  var name = stringValue(raw.name).slice(0, Contract.LIMITS.NAME) || 'Webhook';
+  var at = function (field, extra) { return Object.assign({ kind: Contract.TARGETS.DESTINATION, id: id, field: field }, extra); };
   var parsed = parseUrl(raw.url);
-  if (parsed.error) return { error: name + ': ' + parsed.error, target: at('url') };
+  if (parsed.error) return { error: name + ': ' + parsed.error, target: at(Contract.FIELDS.URL) };
   var hostChanged = !!previous && previous.host !== parsed.host;
   var headers = cleanHeaders(raw.headers, previous && previous.headers, hostChanged);
-  if (headers.error) return { error: name + ': ' + headers.error, target: at('headers', { index: headers.index, part: headers.part }) };
+  if (headers.error) return { error: name + ': ' + headers.error, target: at(Contract.FIELDS.HEADERS, { index: headers.index, part: headers.part }) };
   var format = raw.format === 'text' ? 'text' : 'json';
   var field = stringValue(raw.field) || 'text';
-  if (!/^[A-Za-z0-9_.-]{1,40}$/.test(field)) return { error: name + ': the JSON field name can only use letters, digits, _ . and -.', target: at('field') };
+  if (!/^[A-Za-z0-9_.-]{1,40}$/.test(field)) return { error: name + ': the JSON field name can only use letters, digits, _ . and -.', target: at(Contract.FIELDS.JSON_FIELD) };
   // timestamp and source are added to every JSON message, so a note can't use those names.
-  if (format === 'json' && RESERVED_FIELDS.indexOf(field) !== -1) return { error: name + ': "' + field + '" is added to every message already. Pick another field name.', target: at('field') };
+  if (format === 'json' && RESERVED_FIELDS.indexOf(field) !== -1) return { error: name + ': "' + field + '" is added to every message already. Pick another field name.', target: at(Contract.FIELDS.JSON_FIELD) };
   return { destination: { id: id, name: name, url: parsed.url, host: parsed.host, https: parsed.https, headers: headers.headers, format: format, field: field } };
 }
 
@@ -82,7 +89,7 @@ function findDestination(config, id) {
 // Returns { config } or { error, target }. A reference to a webhook that doesn't exist is an error, not repaired.
 function cleanConfig(message, previous) {
   var list = Array.isArray(message.destinations) ? message.destinations : [];
-  if (list.length > MAX_DESTINATIONS) return { error: 'At most ' + MAX_DESTINATIONS + ' destinations.' };
+  if (list.length > Contract.LIMITS.DESTINATIONS) return { error: 'At most ' + Contract.LIMITS.DESTINATIONS + ' destinations.' };
   var destinations = [];
   var byId = Object.create(null);
   for (var i = 0; i < list.length; i++) {
@@ -96,7 +103,7 @@ function cleanConfig(message, previous) {
   var fallback = destinations.length ? destinations[0].id : '';
   var noteDestination = fallback;
   if (message.noteDestination) {
-    if (!byId[message.noteDestination]) return { error: 'Choose a webhook that exists for voice notes.', target: { kind: 'note', field: 'destination' } };
+    if (!byId[message.noteDestination]) return { error: 'Choose a webhook that exists for voice notes.', target: { kind: Contract.TARGETS.NOTE, field: Contract.FIELDS.DESTINATION } };
     noteDestination = message.noteDestination;
   }
   var commands = {};
@@ -106,24 +113,24 @@ function cleanConfig(message, previous) {
     var command = stringValue(raw && raw.command);
     if (!command) continue;
     var slotName = SLOTS[j].replace('_', ' ');
-    var at = function (field, extra) { return Object.assign({ kind: 'command', slot: SLOTS[j], field: field }, extra); };
-    if (command.length > 100 || /[\u0000-\u001f]/.test(command)) return { error: 'Button ' + slotName + ': the command is too long or has invalid characters.', target: at('command') };
+    var at = function (field, extra) { return Object.assign({ kind: Contract.TARGETS.COMMAND, slot: SLOTS[j], field: field }, extra); };
+    if (command.length > Contract.LIMITS.COMMAND || /[\u0000-\u001f]/.test(command)) return { error: 'Button ' + slotName + ': the command is too long or has invalid characters.', target: at(Contract.FIELDS.COMMAND) };
     var destinationId = raw.destination || fallback;
     var destination = byId[destinationId];
-    if (!destination) return { error: 'Button ' + slotName + ': choose a webhook that exists.', target: at('destination') };
+    if (!destination) return { error: 'Button ' + slotName + ': choose a webhook that exists.', target: at(Contract.FIELDS.DESTINATION) };
     // Saved extra header values belong to the webhook they were saved for.
     var oldCommand = previous && previous.commands && previous.commands[SLOTS[j]];
     var oldHost = oldCommand && previous && findDestination(previous, oldCommand.destination);
     var hostChanged = !!oldCommand && (!oldHost || oldHost.host !== destination.host);
     var extra = cleanHeaders(raw.headers, oldCommand && oldCommand.headers, hostChanged);
-    if (extra.error) return { error: 'Button ' + slotName + ': ' + extra.error, target: at('headers', { index: extra.index, part: extra.part }) };
+    if (extra.error) return { error: 'Button ' + slotName + ': ' + extra.error, target: at(Contract.FIELDS.HEADERS, { index: extra.index, part: extra.part }) };
     commands[SLOTS[j]] = { command: command, destination: destinationId, headers: extra.headers };
   }
   var rawLabels = message.labels && typeof message.labels === 'object' ? message.labels : {};
   var labels = { up: stringValue(rawLabels.up), down: stringValue(rawLabels.down) };
-  if (labels.up.length > 24 || labels.down.length > 24 || /[\u0000-\u001f]/.test(labels.up + labels.down)) {
-    var badLabel = labels.up.length > 24 || /[\u0000-\u001f]/.test(labels.up) ? 'up' : 'down';
-    return { error: 'Button reminders can be up to 24 characters.', target: { kind: 'label', field: badLabel } };
+  if (labels.up.length > Contract.LIMITS.LABEL || labels.down.length > Contract.LIMITS.LABEL || /[\u0000-\u001f]/.test(labels.up + labels.down)) {
+    var badLabel = labels.up.length > Contract.LIMITS.LABEL || /[\u0000-\u001f]/.test(labels.up) ? Contract.FIELDS.UP : Contract.FIELDS.DOWN;
+    return { error: 'Button reminders can be up to ' + Contract.LIMITS.LABEL + ' characters.', target: { kind: Contract.TARGETS.LABEL, field: badLabel } };
   }
   return { config: { v: 2, destinations: destinations, noteDestination: noteDestination, commands: commands, labels: labels } };
 }
@@ -250,6 +257,8 @@ function summarizeCommands(commands) {
 function summary(config) {
   return {
     configured: !!config,
+    // Names of the webhooks that use plain http, so the page can warn each time it opens.
+    insecure: config ? config.destinations.filter(function (destination) { return !destination.https; }).map(function (destination) { return destination.name; }) : [],
     // Header values never leave secure storage.
     destinations: config ? config.destinations.map(function (destination) {
       return {
@@ -276,8 +285,8 @@ Pebble.registerActionHandler(async function (req, respond) {
       respond.error('INVALID_ARGS', 'text must not be empty.');
       return;
     }
-    if (text.length > MAX_TEXT) {
-      respond.error('INVALID_ARGS', 'That message is too long to send (limit ' + MAX_TEXT + ' characters).');
+    if (text.length > Contract.LIMITS.TEXT) {
+      respond.error('INVALID_ARGS', 'That message is too long to send (limit ' + Contract.LIMITS.TEXT + ' characters).');
       return;
     }
     var config = await loadConfig();
@@ -323,11 +332,11 @@ Pebble.registerActionHandler(async function (req, respond) {
 
 Pebble.registerConfigHandler(async function (message, respond) {
   switch (message && message.type) {
-    case 'status':
+    case Contract.MESSAGES.STATUS:
       respond(summary(await loadConfig()));
       return;
 
-    case 'save': {
+    case Contract.MESSAGES.SAVE: {
       var previous = await loadConfig();
       var cleaned = cleanConfig(message, previous);
       if (cleaned.error) {
@@ -335,15 +344,13 @@ Pebble.registerConfigHandler(async function (message, respond) {
         return;
       }
       await Pebble.secureStorage.setItem(CONFIG_KEY, JSON.stringify(cleaned.config));
-      var state = summary(cleaned.config);
-      state.insecure = cleaned.config.destinations.filter(function (destination) { return !destination.https; }).map(function (destination) { return destination.name; });
-      respond(state);
+      respond(summary(cleaned.config));
       return;
     }
 
     // Sends a real request with the saved settings. Doubles as the first "link": the phone asks the user
     // to allow the host the first time it's used.
-    case 'test': {
+    case Contract.MESSAGES.TEST: {
       var saved = await loadConfig();
       var target = saved && findDestination(saved, message.destination);
       if (!target) {
@@ -352,18 +359,19 @@ Pebble.registerConfigHandler(async function (message, respond) {
       }
       var tested = await deliver(target, 'text', 'Test message from the Pebble Webhook plugin');
       tested.permission = await permissionState(target.host);
+      tested.host = target.host;
       respond(tested);
       return;
     }
 
-    case 'pin': {
+    case Contract.MESSAGES.PIN: {
       var pinConfig = await loadConfig();
       var pinResult = await insertPin(pinConfig);
       respond(pinResult.ok ? { ok: true, message: 'Pin added. Look for "Send note" in your watch\'s timeline.' } : { error: pinResult.error });
       return;
     }
 
-    case 'unlink':
+    case Contract.MESSAGES.UNLINK:
       await Pebble.secureStorage.removeItem(CONFIG_KEY);
       respond(summary(null));
       return;

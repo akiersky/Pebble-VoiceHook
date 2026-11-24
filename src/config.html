@@ -105,10 +105,10 @@
       <h2>Button commands</h2>
       <p class="hint" style="margin: 0 0 4px;">Send a fixed command with Up or Down on the watchapp. Leave a command empty to turn that button off.</p>
       <label for="labelUp">Up button reminder</label>
-      <input id="labelUp" type="text" maxlength="24" autocomplete="off" placeholder="e.g. Lights">
+      <input id="labelUp" type="text" autocomplete="off" placeholder="e.g. Lights">
       <div id="commandsUp"></div>
       <label for="labelDown">Down button reminder</label>
-      <input id="labelDown" type="text" maxlength="24" autocomplete="off" placeholder="e.g. Garage">
+      <input id="labelDown" type="text" autocomplete="off" placeholder="e.g. Garage">
       <div id="commandsDown"></div>
       <p class="hint">The reminder is shown on the watch with an arrow pointing at the button. Write whatever helps you remember what it does.</p>
     </section>
@@ -129,6 +129,16 @@
   </main>
 
   <script>
+    // ---- shared contract: generated from src/contract.js by `npm run contract`, do not edit ----
+var Contract = {
+  MESSAGES: { STATUS: 'status', SAVE: 'save', TEST: 'test', PIN: 'pin', UNLINK: 'unlink' },
+  LIMITS: { HEADERS: 10, DESTINATIONS: 10, LABEL: 24, COMMAND: 100, HEADER_VALUE: 2000, TEXT: 8000, NAME: 40 },
+  TARGETS: { DESTINATION: 'destination', COMMAND: 'command', NOTE: 'note', LABEL: 'label' },
+  FIELDS: { URL: 'url', HEADERS: 'headers', JSON_FIELD: 'field', COMMAND: 'command', DESTINATION: 'destination', UP: 'up', DOWN: 'down' },
+  PARTS: { NAME: 'name', VALUE: 'value' },
+};
+// ---- end shared contract ----
+
     var SLOTS = [
       ['up_single', 'Press'], ['up_double', 'Double press'], ['up_hold', 'Hold'],
       ['down_single', 'Press'], ['down_double', 'Double press'], ['down_hold', 'Hold']
@@ -139,6 +149,8 @@
     var commandsDown = document.getElementById('commandsDown');
     var labelUp = document.getElementById('labelUp');
     var labelDown = document.getElementById('labelDown');
+    labelUp.maxLength = Contract.LIMITS.LABEL;
+    labelDown.maxLength = Contract.LIMITS.LABEL;
 
     function commandRows() { return Array.prototype.slice.call(commandsUp.children).concat(Array.prototype.slice.call(commandsDown.children)); }
     var saveButton = document.getElementById('save');
@@ -206,6 +218,15 @@
     document.addEventListener('change', function (event) { clearInvalid(event.target); });
 
     // ----- destinations -----
+    // The Add header buttons stop at the plugin's limit, so the plugin never has to refuse a list.
+    function addHeaderRowChecked(box) {
+      if (box.children.length >= Contract.LIMITS.HEADERS) {
+        setStatus('You can have up to ' + Contract.LIMITS.HEADERS + ' headers here.', 'error');
+        return;
+      }
+      addHeaderRow(box, '', false);
+    }
+
     function addHeaderRow(box, name, hasValue) {
       var row = el('div', { className: 'header-row' });
       var nameInput = el('input', { type: 'text', placeholder: 'Name', autocapitalize: 'none', spellcheck: false, value: name || '' });
@@ -234,7 +255,7 @@
       if (!(data.headers || []).length) addHeaderRow(headers, '', false);
       var addHeader = el('button', { type: 'button', className: 'secondary', textContent: '+ Add header' });
       addHeader.style.width = '100%';
-      addHeader.onclick = function () { addHeaderRow(headers, '', false); };
+      addHeader.onclick = function () { addHeaderRowChecked(headers); };
       var format = el('select', {}, [
         el('option', { value: 'json', textContent: 'JSON with text, timestamp and source' }),
         el('option', { value: 'text', textContent: 'Plain text, just the message' })
@@ -302,8 +323,8 @@
       select.dataset.prev = select.value;
       select.onchange = function () {
         if (select.value !== NEW_WEBHOOK) { select.dataset.prev = select.value; return; }
-        if (destinationsBox.children.length >= 10) {
-          setStatus('You can have up to 10 destinations.', 'error');
+        if (destinationsBox.children.length >= Contract.LIMITS.DESTINATIONS) {
+          setStatus('You can have up to ' + Contract.LIMITS.DESTINATIONS + ' destinations.', 'error');
           select.value = select.dataset.prev;
           return;
         }
@@ -331,7 +352,7 @@
         (entry.headers || []).forEach(function (header) { addHeaderRow(headers, header.name, header.hasValue); });
         var addHeader = el('button', { type: 'button', className: 'secondary', textContent: '+ Add header' });
         addHeader.style.width = '100%';
-        addHeader.onclick = function () { addHeaderRow(headers, '', false); };
+        addHeader.onclick = function () { addHeaderRowChecked(headers); };
         var more = el('details', {}, [
           el('summary', { textContent: 'Extra headers (optional)' }), headers, addHeader,
           el('p', { className: 'hint', textContent: 'Added to the webhook\'s own headers. If a name is the same, both values are sent, comma-separated.' })
@@ -382,35 +403,38 @@
       return card ? card.label() : 'the destination';
     }
 
-    // Marks the field the plugin says is wrong. Returns true if it found one.
+    // Marks the field the plugin says is wrong (see the target shapes in src/contract.js). Returns true if it found one.
     function applyError(result) {
       var target = result.target;
       if (!target) return false;
       var input = null;
       var anchor = null;
-      var card = null;
-      if (target.kind === 'destination') {
-        card = Array.prototype.filter.call(destinationsBox.children, function (c) { return c.dataset.id === target.id; })[0];
+      var T = Contract.TARGETS;
+      var F = Contract.FIELDS;
+      if (target.kind === T.DESTINATION) {
+        var card = Array.prototype.filter.call(destinationsBox.children, function (c) { return c.dataset.id === target.id; })[0];
         if (!card) return false;
         card.open = true;
-        if (target.field === 'headers') {
+        if (target.field === F.HEADERS) {
           anchor = card.fields.headers.children[target.index];
-          input = anchor && anchor.children[target.part === 'value' ? 1 : 0];
+          input = anchor && anchor.children[target.part === Contract.PARTS.VALUE ? 1 : 0];
         } else {
           input = card.fields[target.field];
         }
-      } else if (target.kind === 'command') {
+      } else if (target.kind === T.COMMAND) {
         var row = commandRows().filter(function (r) { return r.slot === target.slot; })[0];
         if (!row) return false;
-        if (target.field === 'headers') {
+        if (target.field === F.HEADERS) {
           row.more.open = true;
           anchor = row.headers.children[target.index];
-          input = anchor && anchor.children[target.part === 'value' ? 1 : 0];
+          input = anchor && anchor.children[target.part === Contract.PARTS.VALUE ? 1 : 0];
         } else {
-          input = row.input;
+          input = target.field === F.DESTINATION ? row.destination : row.input;
         }
-      } else if (target.kind === 'label') {
-        input = target.field === 'up' ? labelUp : labelDown;
+      } else if (target.kind === T.NOTE) {
+        input = noteSelect;
+      } else if (target.kind === T.LABEL) {
+        input = target.field === F.UP ? labelUp : labelDown;
       }
       if (!input) return false;
       markInvalid(input, result.error, anchor);
@@ -423,16 +447,16 @@
       clearAllInvalid();
       setStatus('Saving…');
       try {
-        var result = await send({ type: 'save', destinations: readDestinations(), noteDestination: noteSelect.value, commands: readCommands(), labels: { up: labelUp.value, down: labelDown.value } });
+        var result = await send({ type: Contract.MESSAGES.SAVE, destinations: readDestinations(), noteDestination: noteSelect.value, commands: readCommands(), labels: { up: labelUp.value, down: labelDown.value } });
         if (result.error) { applyError(result); setStatus(result.error, 'error'); return; }
         var openIds = Array.prototype.filter.call(destinationsBox.children, function (c) { return c.open; }).map(function (c) { return c.dataset.id; });
         showState(result);
         Array.prototype.forEach.call(destinationsBox.children, function (c) { c.open = openIds.indexOf(c.dataset.id) !== -1; });
         if (!testId) { setStatus('Saved.', 'ok'); return; }
         setStatus('Sending a test message…');
-        var test = await send({ type: 'test', destination: testId });
+        var test = await send({ type: Contract.MESSAGES.TEST, destination: testId });
         if (test.error) { setStatus(test.error, 'error'); return; }
-        setStatus(labelFor(testId) + ': ' + test.message + (test.ok ? ' It is set up.' : permissionNote(test.permission, '')), test.ok ? 'ok' : 'error');
+        setStatus(labelFor(testId) + ': ' + test.message + (test.ok ? ' It is set up.' : permissionNote(test.permission, test.host)), test.ok ? 'ok' : 'error');
       } catch (error) {
         setStatus('Could not contact the Webhook plugin. Try reopening this page.', 'error');
       } finally { setBusy(false); }
@@ -440,14 +464,14 @@
 
     saveButton.onclick = function () { saveAll(); };
     addDestinationButton.onclick = function () {
-      if (destinationsBox.children.length >= 10) { setStatus('You can have up to 10 destinations.', 'error'); return; }
+      if (destinationsBox.children.length >= Contract.LIMITS.DESTINATIONS) { setStatus('You can have up to ' + Contract.LIMITS.DESTINATIONS + ' destinations.', 'error'); return; }
       addDestination({}, true);
     };
 
     pinButton.onclick = async function () {
       setBusy(true);
       try {
-        var result = await send({ type: 'pin' });
+        var result = await send({ type: Contract.MESSAGES.PIN });
         setStatus(result.error || result.message, result.error ? 'error' : 'ok');
       } catch (error) {
         setStatus('Could not contact the Webhook plugin. Try reopening this page.', 'error');
@@ -457,7 +481,7 @@
     unlinkButton.onclick = async function () {
       setBusy(true);
       try {
-        showState(await send({ type: 'unlink' }));
+        showState(await send({ type: Contract.MESSAGES.UNLINK }));
         setStatus('Settings cleared.', 'ok');
       } catch (error) {
         setStatus('Could not clear the settings. Try reopening this page.', 'error');
@@ -466,7 +490,7 @@
 
     Pebble.addEventListener('ready', async function (event) {
       if (event.target !== 'plugin') return;
-      showState(await send({ type: 'status' }));
+      showState(await send({ type: Contract.MESSAGES.STATUS }));
     });
   </script>
 </body>

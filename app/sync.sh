@@ -3,6 +3,7 @@
 # copies the plugin script and settings page, and merges the plugin block into package.json.
 set -e
 cd "$(dirname "$0")"
+(cd .. && node scripts/inline-contract.js)
 mkdir -p src/plugin
 cp ../src/plugin/index.js src/plugin/index.js
 cp ../src/config.html src/config.html

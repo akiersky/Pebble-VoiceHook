@@ -88,3 +88,78 @@ test('labels are linked to their inputs', async () => {
   });
   assert.deepStrictEqual(unlabeled.map((i) => i.outerHTML.slice(0, 60)), []);
 });
+
+const Contract = require('../src/contract.js');
+
+test('a reserved JSON field name and an over-long command mark their fields', async () => {
+  const t = await start();
+  const card = await fillBasic(t, 'https://x.test/h');
+  const jsonField = card.fields.field;
+  t.type(jsonField, 'timestamp');
+  await t.click(t.document.querySelector('#save'));
+  assert.strictEqual(jsonField.getAttribute('aria-invalid'), 'true');
+
+  t.type(jsonField, 'text');
+  const command = t.document.querySelector('#commandsUp .command').querySelector('input[placeholder="e.g. lights_off"]');
+  t.type(command, 'x'.repeat(Contract.LIMITS.COMMAND + 1));
+  await t.click(t.document.querySelector('#save'));
+  assert.strictEqual(command.getAttribute('aria-invalid'), 'true');
+});
+
+test('the page can mark the note and command webhook selects', async () => {
+  const t = await start();
+  t.window.applyError({ error: 'Choose a webhook that exists for voice notes.', target: { kind: Contract.TARGETS.NOTE, field: Contract.FIELDS.DESTINATION } });
+  assert.strictEqual(t.document.getElementById('noteDestination').getAttribute('aria-invalid'), 'true');
+  t.window.applyError({ error: 'Button up single: choose a webhook that exists.', target: { kind: Contract.TARGETS.COMMAND, slot: 'up_single', field: Contract.FIELDS.DESTINATION } });
+  assert.strictEqual(t.document.querySelector('#commandsUp .command select').getAttribute('aria-invalid'), 'true');
+});
+
+test('the Add header buttons stop at the limit', async () => {
+  const t = await start();
+  const card = await fillBasic(t, 'https://x.test/h');
+  const add = [...card.querySelectorAll('button')].find((b) => b.textContent.includes('Add header'));
+  for (let i = 0; i < Contract.LIMITS.HEADERS + 3; i++) add.click();
+  assert.strictEqual(card.fields.headers.children.length, Contract.LIMITS.HEADERS);
+  assert.match(t.document.querySelector('#status').textContent, /up to 10 headers/);
+});
+
+test('a blocked test send names the host, and a good one says it is set up', async () => {
+  const blocked = await start({ fetchError: 'NotAllowedError', permission: 'denied' });
+  await fillBasic(blocked, 'https://blocked.test/h');
+  const testButton = [...blocked.document.querySelectorAll('#destinations button')].find((b) => b.textContent.includes('send test'));
+  await blocked.click(testButton);
+  assert.match(blocked.document.querySelector('#status').textContent, /blocked from blocked\.test/);
+
+  const good = await start();
+  await fillBasic(good, 'https://good.test/h');
+  await good.click([...good.document.querySelectorAll('#destinations button')].find((b) => b.textContent.includes('send test')));
+  assert.match(good.document.querySelector('#status').textContent, /set up/);
+  assert.strictEqual(good.fetches.length, 1);
+});
+
+test('the http warning is still there when the page is reopened', async () => {
+  const store = {};
+  const first = await start({ store });
+  await fillBasic(first, 'http://plain.test/h');
+  await first.click(first.document.querySelector('#save'));
+  assert.ok(!first.document.getElementById('warning').hidden);
+
+  const reopened = await start({ store });
+  const warning = reopened.document.getElementById('warning');
+  assert.ok(!warning.hidden);
+  assert.match(warning.textContent, /without encryption/);
+});
+
+test('the timeline pin button adds the pin, and Clear settings empties the page', async () => {
+  const t = await start();
+  await fillBasic(t, 'https://x.test/h');
+  await t.click(t.document.querySelector('#save'));
+  await t.click(t.document.querySelector('#pin'));
+  assert.strictEqual(t.pins.length, 1);
+  assert.match(t.document.querySelector('#status').textContent, /Pin added/);
+
+  await t.click(t.document.querySelector('#unlink'));
+  assert.match(t.document.querySelector('#status').textContent, /cleared/);
+  assert.strictEqual(t.document.querySelector('#destinations input[type=url]').value, '');
+  assert.strictEqual(Object.keys(t.store).length, 0);
+});

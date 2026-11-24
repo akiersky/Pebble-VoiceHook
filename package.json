@@ -3,7 +3,8 @@
   "author": "kiersky",
   "version": "0.1.0",
   "scripts": {
-    "test": "node --test test/*.test.cjs"
+    "test": "node --test test/*.test.cjs",
+    "contract": "node scripts/inline-contract.js"
   },
   "pebble": {
     "displayName": "Webhook",
