@@ -5,8 +5,9 @@
 
 #define DICTATION_BUFFER 512
 #define REPLY_TIMEOUT_MS 20000
-#define RESULT_SHOW_MS 1800
-#define ANIMATION_MS 700
+#define FAIL_ANIMATION_MS 700
+#define ICON_ANIMATION_MS 1100
+#define MIN_RESULT_SHOW_MS 1800
 #define FRAME_MS 33
 #define LABEL_MAX 25
 #define ICON_COUNT 5
@@ -14,6 +15,7 @@
 enum { PersistUpLabel = 1, PersistDownLabel = 2 };
 
 typedef enum { StateIdle, StateSending, StateOk, StateFail } State;
+typedef enum { IconRocket, IconThumbsUp, IconMusic, IconTide, IconSent } Icon;
 
 static Window *s_window;
 static Layer *s_canvas;
@@ -23,9 +25,12 @@ static AppTimer *s_frame_timer;
 static AppTimer *s_reset_timer;
 static AppTimer *s_timeout_timer;
 static GBitmap *s_mic;
-static GBitmap *s_confirm_icons[ICON_COUNT];
+// Only the confirmation being shown is loaded, to keep memory low on the older watches.
+static GBitmap *s_confirm_bitmap;
+static GDrawCommandSequence *s_sent_sequence;
 static State s_state = StateIdle;
-static int s_confirm = 0;
+static Icon s_confirm = IconThumbsUp;
+static int32_t s_anim_ms = ICON_ANIMATION_MS;
 static bool s_quick_launch = false;
 static bool s_dictating = false;
 static time_t s_anim_start_s;
@@ -34,17 +39,16 @@ static char s_message[96];
 static char s_up_label[LABEL_MAX];
 static char s_down_label[LABEL_MAX];
 
-static const uint32_t CONFIRM_RESOURCES[ICON_COUNT] = {
-  RESOURCE_ID_IMAGE_ROCKET, RESOURCE_ID_IMAGE_THUMBS_UP, RESOURCE_ID_IMAGE_MUSIC,
-  RESOURCE_ID_IMAGE_TIDE, RESOURCE_ID_IMAGE_SENT,
+static const uint32_t ICON_RESOURCES[ICON_COUNT] = {
+  RESOURCE_ID_IMAGE_ROCKET, RESOURCE_ID_IMAGE_THUMBS_UP, RESOURCE_ID_IMAGE_MUSIC, RESOURCE_ID_IMAGE_TIDE, 0,
 };
 
-static GColor prv_confirm_background(int index) {
-  switch (index) {
-    case 0: return PBL_IF_COLOR_ELSE(GColorPictonBlue, GColorWhite);
-    case 1: return PBL_IF_COLOR_ELSE(GColorMediumAquamarine, GColorWhite);
-    case 2: return PBL_IF_COLOR_ELSE(GColorMelon, GColorWhite);
-    case 3: return PBL_IF_COLOR_ELSE(GColorYellow, GColorWhite);
+static GColor prv_confirm_background(Icon icon) {
+  switch (icon) {
+    case IconRocket: return PBL_IF_COLOR_ELSE(GColorPictonBlue, GColorWhite);
+    case IconThumbsUp: return PBL_IF_COLOR_ELSE(GColorMediumAquamarine, GColorWhite);
+    case IconMusic: return PBL_IF_COLOR_ELSE(GColorMelon, GColorWhite);
+    case IconTide: return PBL_IF_COLOR_ELSE(GColorYellow, GColorWhite);
     default: return PBL_IF_COLOR_ELSE(GColorMalachite, GColorWhite);
   }
 }
@@ -55,13 +59,20 @@ static int32_t prv_elapsed_ms(void) {
   return (int32_t)(now_s - s_anim_start_s) * 1000 + (int32_t)now_ms - (int32_t)s_anim_start_ms;
 }
 
+// A swing that starts at +/-max_degrees, goes back and forth `swings` times and dies away by the end.
+static int32_t prv_swing(int32_t elapsed, int swings, int max_degrees, int decay_percent) {
+  int32_t angle = TRIG_MAX_ANGLE * swings * elapsed / s_anim_ms;
+  int32_t amplitude = 100 - decay_percent * elapsed / s_anim_ms;
+  return sin_lookup(angle) * DEG_TO_TRIGANGLE(max_degrees) / TRIG_MAX_RATIO * amplitude / 100;
+}
+
 // Vertical offset of a drop-and-bounce: starts above its place, hits it and bounces smaller each time.
 static int prv_bounce_offset(int32_t elapsed, int height) {
-  if (elapsed >= ANIMATION_MS) return 0;
-  int32_t angle = TRIG_MAX_ANGLE * 5 * elapsed / (4 * ANIMATION_MS);
+  if (elapsed >= s_anim_ms) return 0;
+  int32_t angle = TRIG_MAX_ANGLE * 5 * elapsed / (4 * s_anim_ms);
   int32_t cosine = cos_lookup(angle);
   if (cosine < 0) cosine = -cosine;
-  return -(int)((int32_t)height * cosine / TRIG_MAX_RATIO * (ANIMATION_MS - elapsed) / ANIMATION_MS);
+  return -(int)((int32_t)height * cosine / TRIG_MAX_RATIO * (s_anim_ms - elapsed) / s_anim_ms);
 }
 
 #if defined(PBL_ROUND)
@@ -106,9 +117,9 @@ static void prv_draw_button_label(GContext *ctx, GRect bounds, int y, const char
 static void prv_draw_cross(GContext *ctx, GPoint center, int size, int32_t elapsed) {
   int half = size * 3 / 10;
   int shake = 0;
-  if (elapsed < ANIMATION_MS) {
-    int32_t angle = TRIG_MAX_ANGLE * elapsed * 4 / ANIMATION_MS;
-    shake = sin_lookup(angle) * 9 * (ANIMATION_MS - elapsed) / ANIMATION_MS / TRIG_MAX_RATIO;
+  if (elapsed < s_anim_ms) {
+    int32_t angle = TRIG_MAX_ANGLE * elapsed * 4 / s_anim_ms;
+    shake = sin_lookup(angle) * 9 * (s_anim_ms - elapsed) / s_anim_ms / TRIG_MAX_RATIO;
   }
   center.x += shake;
   graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorDarkCandyAppleRed, GColorBlack));
@@ -117,8 +128,61 @@ static void prv_draw_cross(GContext *ctx, GPoint center, int size, int32_t elaps
   graphics_draw_line(ctx, GPoint(center.x + half, center.y - half), GPoint(center.x - half, center.y + half));
 }
 
+static void prv_draw_icon(GContext *ctx, GPoint at, int32_t angle) {
+  if (angle == 0) {
+    graphics_draw_bitmap_in_rect(ctx, s_confirm_bitmap, GRect(at.x - 40, at.y - 40, 80, 80));
+  } else {
+    graphics_draw_rotated_bitmap(ctx, s_confirm_bitmap, GPoint(40, 40), angle, at);
+  }
+}
+
+// Each confirmation icon has its own motion.
+static void prv_draw_confirm(GContext *ctx, GPoint center, int32_t elapsed) {
+  int32_t t = elapsed < s_anim_ms ? elapsed : s_anim_ms;
+  switch (s_confirm) {
+    case IconRocket: {
+      // Rumbles on the pad, then blasts off toward the top right and out of sight.
+      GPoint at = center;
+      if (t < 300) {
+        at.x += (t / 45) % 2 ? 3 : -3;
+        at.y += (t / 30) % 2 ? 2 : -2;
+      } else if (t < 1000) {
+        int32_t u = t - 300;
+        int dist = u * u / 2200;
+        at.x += dist * 7 / 10;
+        at.y -= dist * 7 / 10;
+      } else {
+        return;
+      }
+      prv_draw_icon(ctx, at, 0);
+      break;
+    }
+    case IconThumbsUp:
+      // Drops in, bounces, and wobbles as it settles.
+      prv_draw_icon(ctx, GPoint(center.x, center.y + prv_bounce_offset(t, 60)), prv_swing(t, 3, 22, 100));
+      break;
+    case IconMusic:
+      // Rocking side to side to the beat, hopping on each swing.
+      prv_draw_icon(ctx, GPoint(center.x, center.y - abs(prv_swing(t, 5, 10, 50)) / 400), prv_swing(t, 5, 14, 50));
+      break;
+    case IconTide:
+      // A waving shaka.
+      prv_draw_icon(ctx, center, prv_swing(t, 4, 22, 60));
+      break;
+    case IconSent:
+      if (s_sent_sequence) {
+        int32_t last = (int32_t)gdraw_command_sequence_get_total_duration(s_sent_sequence) - 1;
+        GDrawCommandFrame *frame = gdraw_command_sequence_get_frame_by_elapsed(s_sent_sequence, t < last ? t : last);
+        if (frame) gdraw_command_frame_draw(ctx, s_sent_sequence, frame, GPoint(center.x - 40, center.y - 40));
+      }
+      break;
+  }
+}
+
+// The big microphone image bleeds off the left edge; the arrow sits halfway between it and the Select button.
 static GRect prv_mic_rect(GRect bounds) {
-  return GRect((bounds.size.w - 80) / 2, bounds.size.h / 2 - 40, 80, 80);
+  GRect image = gbitmap_get_bounds(s_mic);
+  return GRect(0, (bounds.size.h - image.size.h) / 2, image.size.w, image.size.h);
 }
 
 static void prv_canvas_update(Layer *layer, GContext *ctx) {
@@ -134,12 +198,10 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
   GPoint center = GPoint(bounds.size.w / 2, bounds.size.h * 4 / 10);
   switch (s_state) {
     case StateIdle: {
-      // The microphone in the middle, an arrow toward the Select button, and the user's reminders for Up and Down.
       GRect mic = prv_mic_rect(bounds);
       int mid = bounds.size.h / 2;
       graphics_draw_bitmap_in_rect(ctx, s_mic, mic);
-      // The arrow sits halfway between the microphone's drawn edge (it has padding in its 80px box) and the button.
-      int from_x = mic.origin.x + 58;
+      int from_x = mic.size.w + 2;
       int to_x = prv_edge_x(bounds, mid);
       int length = (to_x - from_x) * 3 / 5;
       if (length < 22) length = 22;
@@ -150,8 +212,7 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
       break;
     }
     case StateOk:
-      graphics_draw_bitmap_in_rect(ctx, s_confirm_icons[s_confirm],
-                                   GRect(center.x - 40, center.y - 40 + prv_bounce_offset(elapsed, 90), 80, 80));
+      prv_draw_confirm(ctx, center, elapsed);
       break;
     case StateFail:
       prv_draw_cross(ctx, center, 80, elapsed);
@@ -165,6 +226,32 @@ static void prv_cancel(AppTimer **timer) {
   if (*timer) { app_timer_cancel(*timer); *timer = NULL; }
 }
 
+static void prv_free_confirm(void) {
+  if (s_confirm_bitmap) { gbitmap_destroy(s_confirm_bitmap); s_confirm_bitmap = NULL; }
+  if (s_sent_sequence) { gdraw_command_sequence_destroy(s_sent_sequence); s_sent_sequence = NULL; }
+}
+
+// Picks a different celebration than last time and loads just that one.
+static void prv_pick_confirm(void) {
+  prv_free_confirm();
+  Icon next = (Icon)(rand() % ICON_COUNT);
+  if (next == s_confirm) next = (Icon)((next + 1) % ICON_COUNT);
+  s_anim_ms = ICON_ANIMATION_MS;
+  if (next == IconSent) {
+    s_sent_sequence = gdraw_command_sequence_create_with_resource(RESOURCE_ID_SENT_ANIM);
+    if (s_sent_sequence) {
+      s_anim_ms = (int32_t)gdraw_command_sequence_get_total_duration(s_sent_sequence);
+    } else {
+      next = IconThumbsUp;
+    }
+  }
+  if (next != IconSent) {
+    s_confirm_bitmap = gbitmap_create_with_resource(ICON_RESOURCES[next]);
+    if (!s_confirm_bitmap) next = IconSent;
+  }
+  s_confirm = next;
+}
+
 static void prv_set_message(const char *text) {
   snprintf(s_message, sizeof(s_message), "%s", text);
   text_layer_set_text(s_message_layer, s_message);
@@ -174,7 +261,7 @@ static void prv_set_message(const char *text) {
 static void prv_frame(void *data) {
   s_frame_timer = NULL;
   layer_mark_dirty(s_canvas);
-  if ((s_state == StateOk || s_state == StateFail) && prv_elapsed_ms() < ANIMATION_MS) {
+  if ((s_state == StateOk || s_state == StateFail) && prv_elapsed_ms() < s_anim_ms) {
     s_frame_timer = app_timer_register(FRAME_MS, prv_frame, NULL);
   }
 }
@@ -186,6 +273,7 @@ static void prv_reset(void *data) {
     return;
   }
   s_state = StateIdle;
+  prv_free_confirm();
   prv_set_message("");
   layer_mark_dirty(s_canvas);
 }
@@ -198,17 +286,17 @@ static void prv_show(State state, const char *text) {
   prv_set_message(text);
   if (state == StateOk || state == StateFail) {
     if (state == StateOk) {
-      // A different celebration each time.
-      int next = rand() % ICON_COUNT;
-      if (next == s_confirm) next = (next + 1) % ICON_COUNT;
-      s_confirm = next;
+      prv_pick_confirm();
       vibes_short_pulse();
     } else {
+      prv_free_confirm();
+      s_anim_ms = FAIL_ANIMATION_MS;
       vibes_double_pulse();
     }
     time_ms(&s_anim_start_s, &s_anim_start_ms);
     s_frame_timer = app_timer_register(FRAME_MS, prv_frame, NULL);
-    s_reset_timer = app_timer_register(RESULT_SHOW_MS, prv_reset, NULL);
+    int show_ms = s_anim_ms + 700;
+    s_reset_timer = app_timer_register(show_ms > MIN_RESULT_SHOW_MS ? show_ms : MIN_RESULT_SHOW_MS, prv_reset, NULL);
   }
   layer_mark_dirty(s_canvas);
 }
@@ -273,7 +361,9 @@ static void prv_dictation(DictationSession *session, DictationSessionStatus stat
 static void prv_start_dictation(void) {
   if (s_state == StateSending) return;
   prv_cancel(&s_reset_timer);
+  prv_cancel(&s_frame_timer);
   s_state = StateIdle;
+  prv_free_confirm();
   prv_set_message("");
   layer_mark_dirty(s_canvas);
   s_dictating = true;
@@ -321,7 +411,6 @@ static void prv_window_load(Window *window) {
   GRect bounds = layer_get_bounds(root);
 
   s_mic = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_MIC);
-  for (int i = 0; i < ICON_COUNT; i++) s_confirm_icons[i] = gbitmap_create_with_resource(CONFIRM_RESOURCES[i]);
 
   s_canvas = layer_create(bounds);
   layer_set_update_proc(s_canvas, prv_canvas_update);
@@ -341,7 +430,7 @@ static void prv_window_unload(Window *window) {
   text_layer_destroy(s_message_layer);
   layer_destroy(s_canvas);
   gbitmap_destroy(s_mic);
-  for (int i = 0; i < ICON_COUNT; i++) gbitmap_destroy(s_confirm_icons[i]);
+  prv_free_confirm();
 }
 
 static void prv_init(void) {

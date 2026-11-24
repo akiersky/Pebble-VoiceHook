@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Webhook app icon: a microphone whose stem bends into a fish hook. Original artwork, drawn in the Pebble icon style. -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  <g transform="rotate(-14 40 40)" stroke="#000000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <polygon fill="#FFFFFF" points="33,5 47,5 54,12 54,29 47,36 33,36 26,29 26,12"/>
+    <line fill="none" x1="26" y1="14" x2="54" y2="14"/>
+    <line fill="none" x1="26" y1="21" x2="54" y2="21"/>
+    <line fill="none" x1="26" y1="28" x2="54" y2="28"/>
+    <path fill="none" d="M40 36 V56 A14 14 0 0 1 12 56 V43"/>
+    <path fill="none" d="M12 50 L6 44"/>
+  </g>
+</svg>

@@ -109,12 +109,12 @@ function cleanConfig(message, previous) {
 function buildRequest(destination, kind, value, now, extraHeaders) {
   var headers = {};
   destination.headers.forEach(function (header) { headers[header.name] = header.value; });
-  // A command's own headers are added to the destination's, replacing any with the same name.
+  // A command's own headers are added to the destination's. If both have the same header name, both
+  // values are sent, comma-separated (the standard way to repeat a header), so nothing is dropped.
   (extraHeaders || []).forEach(function (header) {
-    Object.keys(headers).forEach(function (name) {
-      if (name.toLowerCase() === header.name.toLowerCase()) delete headers[name];
-    });
-    headers[header.name] = header.value;
+    var existing = Object.keys(headers).filter(function (name) { return name.toLowerCase() === header.name.toLowerCase(); })[0];
+    if (existing) headers[existing] = headers[existing] + ', ' + header.value;
+    else headers[header.name] = header.value;
   });
   var hasType = Object.keys(headers).some(function (name) { return name.toLowerCase() === 'content-type'; });
   var body;

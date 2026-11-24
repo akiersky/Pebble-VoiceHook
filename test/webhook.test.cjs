@@ -63,7 +63,7 @@ test('command headers are added to the destination headers and keep saved values
 
   const base = { url: 'https://example.com/h', headers: [{ name: 'Authorization', value: 'a' }, { name: 'X-Scene', value: 'default' }], format: 'json', field: 'text' };
   const request = buildRequest(base, 'command', 'go', new Date(), [{ name: 'x-scene', value: 'movie' }, { name: 'X-New', value: 'n' }]);
-  assert.deepStrictEqual(request.options.headers, { Authorization: 'a', 'x-scene': 'movie', 'X-New': 'n', 'Content-Type': 'application/json' });
+  assert.deepStrictEqual(request.options.headers, { Authorization: 'a', 'X-Scene': 'default, movie', 'X-New': 'n', 'Content-Type': 'application/json' });
 });
 
 test('buildRequest builds JSON, command and text bodies', () => {

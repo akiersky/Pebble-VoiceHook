@@ -291,7 +291,7 @@
         addHeader.onclick = function () { addHeaderRow(headers, '', false); };
         var more = el('details', {}, [
           el('summary', { textContent: 'Extra headers (optional)' }), headers, addHeader,
-          el('p', { className: 'hint', textContent: 'Sent along with the webhook\'s own headers. Same name replaces the webhook\'s value.' })
+          el('p', { className: 'hint', textContent: 'Added to the webhook\'s own headers. If a name is the same, both values are sent, comma-separated.' })
         ]);
         more.open = (entry.headers || []).length > 0;
         var row = el('div', { className: 'command' }, [
