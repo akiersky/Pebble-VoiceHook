@@ -339,3 +339,14 @@ test('settings saved by version 0.1 are migrated, and saving or clearing removes
   await u.click(u.document.querySelector('#unlink'));
   assert.strictEqual(Object.keys(u.store).length, 0, 'cleared: nothing left, including the old secret');
 });
+
+test('the page goes by the plugin\'s name, or by the watchapp\'s name in the watchapp', async () => {
+  const plugin = await start();
+  assert.strictEqual(plugin.document.title, 'Webhook Actions');
+  assert.strictEqual(plugin.document.querySelector('h1').textContent, 'Webhook Actions');
+  assert.strictEqual(plugin.document.querySelector('#logo').textContent, 'W');
+  const app = await start({ watchapp: true });
+  assert.strictEqual(app.document.title, 'VoiceHook');
+  assert.strictEqual(app.document.querySelector('h1').textContent, 'VoiceHook');
+  assert.strictEqual(app.document.querySelector('#logo').textContent, 'V');
+});

@@ -32,7 +32,7 @@ HIGHLIGHTS
 PRIVATE BY DESIGN
 Messages go only to the URLs you enter. Nothing is sent to the developer or to any third party, and there are no accounts or analytics. Webhook URLs and header values are kept in your phone's encrypted plugin storage and are never shown again after you save them. Your phone asks your permission the first time VoiceHook connects to each new host.
 
-Needs the Pebble mobile app with plugin support (version 2.0 or later) and a watch with a microphone. Includes the VoiceHook plugin, which other watch apps can also use to send to your webhooks (they can't see your headers or choose another address, and the plugin answers at most one request per second per action).
+Needs the Pebble mobile app with plugin support (version 2.0 or later) and a watch with a microphone. Includes the Webhook Actions plugin, which other watch apps can also use to send to your webhooks (they can't see your headers or choose another address, and the plugin answers at most one request per second per action).
 
 ## Release notes (1.0.0)
 First release: voice notes, six button commands, multiple webhooks with custom headers, and a settings page on your phone.

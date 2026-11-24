@@ -1,4 +1,4 @@
-// VoiceHook: POSTs the user's text or button commands to URLs they choose, with headers they choose.
+// Webhook Actions: POSTs the user's text or button commands to URLs they choose, with headers they choose.
 // The whole configuration (destinations, header values) lives in secureStorage, because webhook URLs
 // and headers often carry tokens. The settings page only ever sees hosts and header names back.
 
@@ -45,6 +45,9 @@ var Contract = {
   },
 };
 // ---- end shared contract ----
+
+// What users call this plugin. app/sync.js sets it to the watchapp's name in the copy bundled with the watchapp.
+var PRODUCT = 'Webhook Actions';
 
 var CONFIG_KEY = 'webhook.config.v2';
 var LEGACY_KEY = 'webhook.config.v1';
@@ -224,7 +227,7 @@ function buildRequest(destination, kind, value, now, extraHeaders) {
 function migrate(stored) {
   if (stored && stored.v === 2 && Array.isArray(stored.destinations)) return stored;
   if (stored && stored.url) {
-    var destination = { id: 'main', name: 'VoiceHook', url: stored.url, host: stored.host, https: stored.https, headers: stored.headers || [], format: stored.format || 'json', field: stored.field || 'text' };
+    var destination = { id: 'main', name: 'Webhook', url: stored.url, host: stored.host, https: stored.https, headers: stored.headers || [], format: stored.format || 'json', field: stored.field || 'text' };
     return { v: 2, destinations: [destination], noteDestination: 'main', commands: {}, labels: { up: '', down: '' } };
   }
   return null;
@@ -257,23 +260,23 @@ async function permissionState(host) {
 
 // Sends a note or command and says what happened: { ok, status, message }. Never throws.
 async function deliver(destination, kind, value, doneText, extraHeaders) {
-  if (!destination) return { ok: false, status: 0, message: 'That webhook was removed. Choose another in the VoiceHook settings.' };
+  if (!destination) return { ok: false, status: 0, message: 'That webhook was removed. Choose another in the ' + PRODUCT + ' settings.' };
   var request = buildRequest(destination, kind, value, new Date(), extraHeaders);
-  console.log('VoiceHook sending to ' + destination.host + ' with headers: ' + Object.keys(request.options.headers).join(', '));
+  console.log(PRODUCT + ' sending to ' + destination.host + ' with headers: ' + Object.keys(request.options.headers).join(', '));
   try {
     var response = await fetch(request.url, request.options);
     if (response.status >= 200 && response.status < 300) {
       return { ok: true, status: response.status, message: doneText || 'Sent to ' + destination.host + '.' };
     }
     if (response.status === 401 || response.status === 403) {
-      return { ok: false, status: response.status, message: destination.host + ' rejected the request (' + response.status + '). Check your headers in the VoiceHook settings.' };
+      return { ok: false, status: response.status, message: destination.host + ' rejected the request (' + response.status + '). Check your headers in the ' + PRODUCT + ' settings.' };
     }
     return { ok: false, status: response.status, message: destination.host + ' answered ' + response.status + '.' };
   } catch (error) {
     var name = error && error.name;
-    console.error('VoiceHook request failed: ' + name);
+    console.error(PRODUCT + ' request failed: ' + name);
     if (name === 'NotAllowedError') {
-      return { ok: false, status: 0, blocked: true, message: 'VoiceHook isn\'t allowed to connect to ' + destination.host + '. Allow it in the plugin\'s Permissions.' };
+      return { ok: false, status: 0, blocked: true, message: PRODUCT + ' isn\'t allowed to connect to ' + destination.host + '. Allow it in the plugin\'s Permissions.' };
     }
     return { ok: false, status: 0, message: 'Could not reach ' + destination.host + '. The message may not have been delivered. Redirects aren\'t followed, so use the final URL.' };
   }
@@ -290,7 +293,7 @@ async function insertPin(config) {
     layout: {
       type: 'genericPin',
       title: 'Send note',
-      subtitle: config && findDestination(config, config.noteDestination) ? 'to ' + findDestination(config, config.noteDestination).host : 'VoiceHook',
+      subtitle: config && findDestination(config, config.noteDestination) ? 'to ' + findDestination(config, config.noteDestination).host : PRODUCT,
       tinyIcon: 'system://images/NOTIFICATION_FLAG',
     },
     actions: [{ title: 'Send note', type: 'pluginAction', action: 'send_message', inputArg: 'text' }],
@@ -300,7 +303,7 @@ async function insertPin(config) {
     return { ok: true };
   } catch (error) {
     console.error('Pin insert failed: ' + (error && error.name) + ' ' + (error && error.message));
-    return { ok: false, error: 'Could not add the pin' + (error && error.name === 'NotAllowedError' ? ': allow the Timeline permission for VoiceHook.' : '.') };
+    return { ok: false, error: 'Could not add the pin' + (error && error.name === 'NotAllowedError' ? ': allow the Timeline permission for ' + PRODUCT + '.' : '.') };
   }
 }
 
@@ -336,7 +339,7 @@ function summary(config) {
   };
 }
 
-var SETUP_FIRST = 'Set your webhook URL in the VoiceHook plugin\'s settings first.';
+var SETUP_FIRST = 'Set your webhook URL in the ' + PRODUCT + ' plugin\'s settings first.';
 
 function failure(result) {
   return { ok: false, code: result.status === 401 || result.status === 403 ? 'AUTH_REQUIRED' : 'UNKNOWN', message: result.message };
@@ -374,7 +377,7 @@ async function runAction(req) {
     return { ok: true, text: JSON.stringify({ up: labels.up, down: labels.down, configured: !!stored }) };
   }
   console.error('Unsupported action: ' + req.action);
-  return { ok: false, code: 'PLUGIN_UNAVAILABLE', message: 'Unsupported VoiceHook action.' };
+  return { ok: false, code: 'PLUGIN_UNAVAILABLE', message: 'Unsupported ' + PRODUCT + ' action.' };
 }
 
 Pebble.registerActionHandler(async function (req, respond) {
@@ -411,7 +414,7 @@ Pebble.registerConfigHandler(async function (message, respond) {
         respond({ error: 'Save your settings first.' });
         return;
       }
-      var tested = await deliver(target, 'text', 'Test message from the VoiceHook plugin');
+      var tested = await deliver(target, 'text', 'Test message from ' + PRODUCT);
       tested.permission = await permissionState(target.host);
       tested.host = target.host;
       respond(tested);

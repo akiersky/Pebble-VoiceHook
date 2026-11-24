@@ -41,7 +41,7 @@ notes is configurable, or choose plain text and the body is just the message. A 
 Redirects aren't followed, so use the final URL.
 
 ## Use the plugin from your own app
-The plugin works on its own. Any Pebble app can call it with `Pebble.invokeAction`:
+The plugin, **Webhook Actions**, is also released on its own. Any Pebble app can call it with `Pebble.invokeAction`:
 
 ```js
 Pebble.invokeAction({ plugin: '<plugin uuid>', action: 'send_message', args: { text: 'buy milk' } });

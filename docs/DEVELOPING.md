@@ -1,7 +1,8 @@
 # Developing VoiceHook
 
 The repository holds two things that ship together: the **plugin** (the repo root) and the **watchapp**
-(`app/`), which bundles the plugin. The plugin knows nothing about any particular server.
+(`app/`), which bundles the plugin. The plugin ("Webhook Actions" on its own, "VoiceHook" inside the watchapp: `PRODUCT` in the plugin and the page,
+set by `app/sync.js`) knows nothing about any particular server.
 
 ## Layout
 - `src/plugin/index.js`: the plugin. Actions `send_message { text }`, `send_command { slot }` and the internal

@@ -52,7 +52,7 @@ function manifest() {
 // Every generated file in this folder as { file, content }.
 function outputs() {
   return [
-    { file: 'src/plugin/index.js', content: readRoot('src/plugin/index.js') },
+    { file: 'src/plugin/index.js', content: withName(readRoot('src/plugin/index.js'), 'src/plugin/index.js') },
     { file: 'src/config.html', content: watchappPage() },
     { file: 'package.json', content: manifest() },
   ];
@@ -63,7 +63,14 @@ function watchappPage() {
   const flag = 'var HAS_WATCHAPP = false;';
   const page = readRoot('src/config.html');
   if (!page.includes(flag)) throw new Error('src/config.html has no HAS_WATCHAPP flag');
-  return page.replace(flag, 'var HAS_WATCHAPP = true;');
+  return withName(page.replace(flag, 'var HAS_WATCHAPP = true;'), 'src/config.html');
+}
+
+// In the watchapp the plugin and its page go by the watchapp's name, not the standalone plugin's.
+function withName(text, file) {
+  const standalone = "var PRODUCT = 'Webhook Actions';";
+  if (!text.includes(standalone)) throw new Error(file + ' has no PRODUCT line');
+  return text.replace(standalone, "var PRODUCT = 'VoiceHook';");
 }
 
 const current = (file) => { try { return readHere(file); } catch (e) { return null; } };

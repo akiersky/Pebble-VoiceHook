@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>VoiceHook</title>
+  <title>Webhook Actions</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -88,9 +88,9 @@
 <body>
   <main>
     <header>
-      <div class="logo" aria-hidden="true">V</div>
+      <div class="logo" id="logo" aria-hidden="true">W</div>
       <div>
-        <h1>VoiceHook</h1>
+        <h1 id="product">Webhook Actions</h1>
         <p id="summary">Send notes from your watch to any URL.</p>
       </div>
     </header>
@@ -204,6 +204,8 @@ var Contract = {
 
     // The watchapp copy of this page has this set to true when app/sync.js builds it.
     var HAS_WATCHAPP = false;
+    // The name shown for the plugin. app/sync.js sets the watchapp's name in the watchapp's copy.
+    var PRODUCT = 'Webhook Actions';
 
     function slotTitle(slot) { return slot.gesture.charAt(0).toUpperCase() + slot.gesture.slice(1); }
 
@@ -608,6 +610,9 @@ var Contract = {
     }
 
     function applyProduct() {
+      document.title = PRODUCT;
+      document.getElementById('product').textContent = PRODUCT;
+      document.getElementById('logo').textContent = PRODUCT.charAt(0);
       document.getElementById('reminderUp').hidden = !HAS_WATCHAPP;
       document.getElementById('reminderDown').hidden = !HAS_WATCHAPP;
       document.getElementById('reminderHint').hidden = !HAS_WATCHAPP;
@@ -620,7 +625,7 @@ var Contract = {
     applyProduct();
 
     function permissionNote(permission, host) {
-      if (permission === 'denied') return ' VoiceHook is blocked from ' + host + '. Allow it under the plugin\'s Permissions.';
+      if (permission === 'denied') return ' ' + PRODUCT + ' is blocked from ' + host + '. Allow it under the plugin\'s Permissions.';
       return '';
     }
 
@@ -700,7 +705,7 @@ var Contract = {
         if (test.error) { setStatus(test.error, 'error'); return; }
         setStatus(labelFor(testId) + ': ' + test.message + (test.ok ? ' It is set up.' : permissionNote(test.permission, test.host)), test.ok ? 'ok' : 'error');
       } catch (error) {
-        setStatus('Could not contact the VoiceHook plugin. Try reopening this page.', 'error');
+        setStatus('Could not contact the ' + PRODUCT + ' plugin. Try reopening this page.', 'error');
       } finally { setBusy(false); restoreFocus(trigger, saveButton); }
     }
 
@@ -717,7 +722,7 @@ var Contract = {
         var result = await send({ type: Contract.MESSAGES.PIN });
         setStatus(result.error || result.message, result.error ? 'error' : 'ok');
       } catch (error) {
-        setStatus('Could not contact the VoiceHook plugin. Try reopening this page.', 'error');
+        setStatus('Could not contact the ' + PRODUCT + ' plugin. Try reopening this page.', 'error');
       } finally { setBusy(false); restoreFocus(pinButton, saveButton); }
     };
 

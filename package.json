@@ -13,7 +13,7 @@
     "contract": "node scripts/inline-contract.js"
   },
   "pebble": {
-    "displayName": "VoiceHook Plugin",
+    "displayName": "Webhook Actions",
     "uuid": "020583bc-828e-454c-b579-de76d60ec3e6",
     "sdkVersion": "3",
     "usesPermissions": [

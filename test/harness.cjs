@@ -33,7 +33,7 @@ async function start(options) {
 
   let ready;
   let html = fs.readFileSync(path.join(__dirname, '..', 'src', 'config.html'), 'utf8');
-  if (options.watchapp) html = html.replace('var HAS_WATCHAPP = false;', 'var HAS_WATCHAPP = true;');
+  if (options.watchapp) html = html.replace('var HAS_WATCHAPP = false;', 'var HAS_WATCHAPP = true;').replace("var PRODUCT = 'Webhook Actions';", "var PRODUCT = 'VoiceHook';");
   const dom = new JSDOM(html, {
     runScripts: 'dangerously',
     pretendToBeVisual: true,
