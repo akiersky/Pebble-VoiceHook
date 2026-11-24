@@ -13,7 +13,7 @@ const here = __dirname;
 const root = path.join(here, '..');
 const contract = require('../scripts/inline-contract.js');
 const Contract = require('../src/contract.js');
-const ICONS = ['rocket', 'thumbs_up', 'music', 'tide'];
+const ICONS = ['rocket', 'music'];   // the picture icons; the others are vector animations (tools/make-pdc.py)
 
 const readHere = (file) => fs.readFileSync(path.join(here, file), 'utf8');
 const readRoot = (file) => fs.readFileSync(path.join(root, file), 'utf8');

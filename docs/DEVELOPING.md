@@ -50,6 +50,8 @@ Reference plugin: https://github.com/coredevices/pebble-apps/tree/main/workflowy
   sending screen on each emulator at the exact display size, then restores the normal build.
 - `render-banner.py`: the 720x320 appstore banner and `docs/images/watch.png` for the README.
 - `render-settings-shot.sh`: `docs/images/settings.png`, the settings page in headless Chrome.
+- `make-pdc.py`: writes the vector animations for the thumbs-up and the shaka (`resources/images/*_anim.pdc`) from the
+  iconography SVGs; the motion is described in the script. `--sheet` also writes contact sheets of the frames.
 - `render-art.py`: the app icon, the confirmation icons for each screen size, and the store icons.
 
 Icons are from https://github.com/pebble-dev/iconography (Apache 2.0), see `app/resources/images/ATTRIBUTION.md`.

@@ -34,8 +34,8 @@ static int s_freeze_percent = -1;   // RESULT 100 + n: hold the plane animation 
 #endif
 
 typedef enum { StateIdle, StateStarting, StateSending, StateOk, StateFail } State;
-// IconSent (the paper plane, a vector animation) must stay last: it is the voice note's icon, and button
-// commands pick at random from the ones before it.
+// Rocket and Music are pictures that the code moves and turns; ThumbsUp, Tide and Sent are vector animations (PDC).
+// IconSent must stay last: it is the voice note's icon, and button commands pick at random from the ones before it.
 typedef enum { IconRocket, IconThumbsUp, IconMusic, IconTide, IconSent } Icon;
 
 static Window *s_window;
@@ -64,8 +64,15 @@ static char s_up_label[LABEL_MAX];
 static char s_down_label[LABEL_MAX];
 
 static const uint32_t ICON_RESOURCES[ICON_COUNT] = {
-  RESOURCE_ID_IMAGE_ROCKET, RESOURCE_ID_IMAGE_THUMBS_UP, RESOURCE_ID_IMAGE_MUSIC, RESOURCE_ID_IMAGE_TIDE, 0,
+  RESOURCE_ID_IMAGE_ROCKET, 0, RESOURCE_ID_IMAGE_MUSIC, 0, 0,
 };
+static const uint32_t PDC_RESOURCES[ICON_COUNT] = {
+  0, RESOURCE_ID_THUMBS_ANIM, 0, RESOURCE_ID_TIDE_ANIM, RESOURCE_ID_SENT_ANIM,
+};
+
+static bool prv_is_vector(Icon icon) {
+  return icon == IconThumbsUp || icon == IconTide || icon == IconSent;
+}
 
 // ---- the microphone, drawn in code so it can move, turn and grow. Coordinates are in half-units of the 80x80 artwork.
 typedef struct { int16_t x1, y1, x2, y2; uint8_t width; } MicLine;
@@ -191,17 +198,6 @@ static int32_t prv_swing(int32_t elapsed, int swings, int max_degrees, int decay
   return sin_lookup(angle) * DEG_TO_TRIGANGLE(max_degrees) / TRIG_MAX_RATIO * amplitude / 100;
 }
 
-// Horizontal offset of a spring: starts `distance` to the left, crosses the middle, overshoots a little and
-// settles. The overshoot is halved so the icon stays on the screen once it has arrived.
-static int prv_slide_offset(int32_t elapsed, int distance) {
-  if (elapsed >= s_anim_ms) return 0;
-  int32_t cosine = cos_lookup(TRIG_MAX_ANGLE * elapsed / s_anim_ms);
-  int32_t left = s_anim_ms - elapsed;
-  int32_t decay = left * left / s_anim_ms * left / s_anim_ms;   // (1 - t)^3, in the same units as s_anim_ms
-  int offset = -(int)((int32_t)distance * cosine / TRIG_MAX_RATIO * decay / s_anim_ms);
-  return cosine < 0 ? offset / 2 : offset;
-}
-
 #if defined(PBL_ROUND)
 static int prv_isqrt(int value) {
   int root = 0;
@@ -286,29 +282,16 @@ static void prv_draw_confirm(GContext *ctx, GPoint center, int32_t elapsed) {
       prv_draw_icon(ctx, at, 0);
       break;
     }
-    case IconThumbsUp: {
-      // Slides in from the left like a spring, then wobbles as it settles. A rotated bitmap is only drawn once it
-      // is wholly on the screen, so it never has to be clipped at an edge while turning.
-      int screen_w = center.x * 2;
-      GPoint at = GPoint(center.x + prv_slide_offset(t, center.x + ICON_HALF), center.y);
-      int32_t ramp = t < s_anim_ms * 4 / 10 ? t * 10 / (s_anim_ms * 4) : 10;   // the wobble builds up over 40%, in tenths
-      int32_t wobble = prv_swing(t, 3, 22, 100) * ramp / 10;
-      bool on_screen = at.x - ICON_HALF >= 0 && at.x + ICON_HALF <= screen_w;
-      prv_draw_icon(ctx, at, on_screen ? wobble : 0);
-      break;
-    }
     case IconMusic:
       // Rocking side to side to the beat, hopping on each swing.
       prv_draw_icon(ctx, GPoint(center.x, center.y - abs(prv_swing(t, 5, 10, 50)) / 400), prv_swing(t, 5, 14, 50));
       break;
+    case IconThumbsUp:
     case IconTide:
-      // A waving shaka.
-      prv_draw_icon(ctx, center, prv_swing(t, 4, 22, 60));
-      break;
     case IconSent:
       if (s_sequence) {
-        // The plane first flies in, then its own animation plays.
-        int32_t fly_in = SENT_FLY_IN_MS;
+        // The plane first flies in, then plays; the thumbs-up and the shaka play at once.
+        int32_t fly_in = s_confirm == IconSent ? SENT_FLY_IN_MS : 0;
         int32_t last = (int32_t)gdraw_command_sequence_get_total_duration(s_sequence) - 1;
         int32_t play = t - fly_in;
 #if defined(SCREENSHOT_MODE)
@@ -407,7 +390,7 @@ static void prv_idle_expired(void *data) {
   window_stack_pop_all(true);
 }
 
-// The Sent animation is drawn in an 80x80 box; scale every point and stroke once, when it is loaded.
+// The vector animations are drawn in an 80x80 box; scale every point and stroke once, when it is loaded.
 static void prv_scale_sequence(GDrawCommandSequence *sequence) {
   uint32_t frames = gdraw_command_sequence_get_num_frames(sequence);
   for (uint32_t i = 0; i < frames; i++) {
@@ -442,16 +425,16 @@ static void prv_pick_confirm(bool voice_note) {
     if (next == s_confirm) next = (Icon)((next + 1) % IconSent);
   }
   s_anim_ms = ICON_ANIMATION_MS;
-  if (next == IconSent) {
-    s_sequence = gdraw_command_sequence_create_with_resource(RESOURCE_ID_SENT_ANIM);
+  if (prv_is_vector(next)) {
+    s_sequence = gdraw_command_sequence_create_with_resource(PDC_RESOURCES[next]);
     if (s_sequence) {
       prv_scale_sequence(s_sequence);
-      s_anim_ms = (int32_t)gdraw_command_sequence_get_total_duration(s_sequence) + SENT_FLY_IN_MS;
+      s_anim_ms = (int32_t)gdraw_command_sequence_get_total_duration(s_sequence) + (next == IconSent ? SENT_FLY_IN_MS : 0);
     } else {
-      next = IconThumbsUp;
+      next = IconRocket;
     }
   }
-  if (next != IconSent) {
+  if (!prv_is_vector(next)) {
     s_confirm_bitmap = gbitmap_create_with_resource(ICON_RESOURCES[next]);
     if (!s_confirm_bitmap) next = IconSent;   // (its animation then simply does not draw)
   }

@@ -1,7 +1,7 @@
 {
   "name": "voicehook",
   "author": "kiersky",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "keywords": [
     "pebble-app"
   ],
@@ -27,6 +27,16 @@
           "type": "raw",
           "name": "SENT_ANIM",
           "file": "images/sent_anim.pdc"
+        },
+        {
+          "type": "raw",
+          "name": "THUMBS_ANIM",
+          "file": "images/thumbs_anim.pdc"
+        },
+        {
+          "type": "raw",
+          "name": "TIDE_ANIM",
+          "file": "images/tide_anim.pdc"
         }
       ]
     },

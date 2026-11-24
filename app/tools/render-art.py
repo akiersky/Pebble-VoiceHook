@@ -33,8 +33,8 @@ render(icon_svg, 80, 80).save(os.path.join(STORE, 'icon-80.png'))   # the store'
 
 # ---- confirmation icons, one size per screen class (sizes set by hand in screens.json)
 ICON_SIZES = {screen['name']: screen['icon'] for screen in json.load(open(os.path.join(HERE, '..', 'screens.json')))}
-CONFIRM = {'rocket': '80px_Rocket.svg', 'thumbs_up': 'Pebble_80x80_Thumbs_up.svg',
-           'music': 'Pebble_80x80_Music_event.svg', 'tide': 'Pebble_80x80_Tide_is_high.svg'}
+# (The thumbs-up and the shaka are vector animations: see make-pdc.py.)
+CONFIRM = {'rocket': '80px_Rocket.svg', 'music': 'Pebble_80x80_Music_event.svg'}
 for screen, size in ICON_SIZES.items():
     for name, source in CONFIRM.items():
         svg = open(os.path.join(ART, source)).read()
