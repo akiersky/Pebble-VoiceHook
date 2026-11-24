@@ -31,7 +31,7 @@ render(icon_svg, 80, 80).save(os.path.join(STORE, 'icon-80.png'))   # the store'
 
 # (The main-screen microphone is drawn in code on the watch, so it can move and turn.)
 
-# ---- confirmation icons, one size per screen class (about 70% of the screen width)
+# ---- confirmation icons, one size per screen class (sizes set by hand in screens.json)
 ICON_SIZES = {screen['name']: screen['icon'] for screen in json.load(open(os.path.join(HERE, '..', 'screens.json')))}
 CONFIRM = {'rocket': '80px_Rocket.svg', 'thumbs_up': 'Pebble_80x80_Thumbs_up.svg',
            'music': 'Pebble_80x80_Music_event.svg', 'tide': 'Pebble_80x80_Tide_is_high.svg'}

@@ -11,14 +11,14 @@ check everything first. Copy for both listings is in `app/store-assets/listing.m
 - [ ] Set `version` to `1.0.0` in `package.json` (plugin) and `app/package.base.json` (watchapp). The store wants
       `major.minor.0`, so development builds (`0.1.x`) are not published. Each later release needs a new version.
 - [ ] `author` is `kiersky` in both manifests.
-- [ ] Run `npm test`, then `app/sync.sh` and `pebble build` in `app/` and in the root.
+- [ ] Run `npm test`, then `app/sync.sh` and `pebble clean && pebble build` in `app/` and in the root (a clean build, so no screenshot-mode objects linger).
 - [ ] Try the build on a real watch: voice note, all six button gestures, Quick Launch, idle exit, a failure
       (turn off Wi-Fi), settings page on the phone.
 - [ ] `pebble login` (opens a browser; Google, GitHub or Apple).
 
 ## Watchapp
 ```
-cd app && ./sync.sh && pebble build
+cd app && ./sync.sh && pebble clean && pebble build
 pebble publish --pbw build/app.pbw \
   --name "Webhook" --version 1.0.0 --category "Tools & Utilities" \
   --description "$(sed -n '/^## Description/,/^## Release notes/p' store-assets/listing.md | sed '1d;$d')" \

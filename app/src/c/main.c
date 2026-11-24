@@ -15,8 +15,10 @@
 #define FRAME_MS 33
 #define ICON_COUNT 5
 
-// ICON_SIZE (about 70% of the screen width) comes from contract.h, generated from screens.json.
+// ICON_SIZE comes from contract.h, generated from screens.json, where each screen's size is set by hand.
 #define ICON_HALF (ICON_SIZE / 2)
+// Taller than one line of GOTHIC_24_BOLD means the message wrapped.
+#define MESSAGE_LARGE_MAX_H 36
 // The message sits under the icon; on a round screen it starts higher, where the circle is still wide.
 #define MESSAGE_Y_PERCENT PBL_IF_ROUND_ELSE(62, 69)
 
@@ -427,11 +429,13 @@ static void prv_pick_confirm(bool voice_note) {
 
 static void prv_set_message(const char *text) {
   snprintf(s_message, sizeof(s_message), "%s", text);
-  // One line gets the large font; a message that needs two lines gets the smaller one so it still fits.
+  // One line (at most MESSAGE_LARGE_MAX_H tall) gets the large font; anything longer gets the smaller one, and
+  // whatever still does not fit is cut off with an ellipsis rather than spilling out of the layer.
   GFont large = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
   GSize size = graphics_text_layout_get_content_size(s_message, large, layer_get_bounds(text_layer_get_layer(s_message_layer)),
                                                      GTextOverflowModeWordWrap, GTextAlignmentCenter);
-  text_layer_set_font(s_message_layer, size.h > 36 ? fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD) : large);
+  text_layer_set_font(s_message_layer, size.h > MESSAGE_LARGE_MAX_H ? fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD) : large);
+  text_layer_set_overflow_mode(s_message_layer, GTextOverflowModeTrailingEllipsis);
   text_layer_set_text(s_message_layer, s_message);
   layer_set_hidden(text_layer_get_layer(s_message_layer), s_state == StateIdle || s_state == StateStarting);
 }

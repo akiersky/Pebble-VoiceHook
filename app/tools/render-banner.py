@@ -10,7 +10,14 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STORE = os.path.join(HERE, '..', 'store-assets')
-FONT = '/System/Library/Fonts/Supplemental/Arial Rounded Bold.ttf'
+FONTS = ['/System/Library/Fonts/Supplemental/Arial Rounded Bold.ttf', '/Library/Fonts/Arial Rounded Bold.ttf',
+         '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf']
+
+def font(size):
+    for path in FONTS:
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size)
+    raise SystemExit('No bold font found; add one to FONTS in tools/render-banner.py')
 W, H = 720, 320
 BACKGROUND = (71, 114, 250)      # the settings page's accent blue
 
@@ -45,14 +52,14 @@ ImageDraw.Draw(tile).rounded_rectangle((0, 0, 119, 119), radius=28, fill=(255, 2
 tile.alpha_composite(icon(96), (12, 12))
 shadowed(banner, tile, (40, 52))
 
-draw.text((40, 188), 'Webhook', font=ImageFont.truetype(FONT, 58), fill=(255, 255, 255))
-draw.text((42, 254), 'Voice notes and button presses,', font=ImageFont.truetype(FONT, 21), fill=(232, 238, 255))
-draw.text((42, 282), 'sent to any URL you choose.', font=ImageFont.truetype(FONT, 21), fill=(232, 238, 255))
+draw.text((40, 188), 'Webhook', font=font(58), fill=(255, 255, 255))
+draw.text((42, 254), 'Voice notes and button presses,', font=font(21), fill=(232, 238, 255))
+draw.text((42, 282), 'sent to any URL you choose.', font=font(21), fill=(232, 238, 255))
 
 left = device(os.path.join(STORE, 'watch', 'basalt_idle.png'), 1)
 right = device(os.path.join(STORE, 'watch', 'basalt_thumbs.png'), 1)
-shadowed(banner, left, (400, 56))
-shadowed(banner, right, (558, 96))
+shadowed(banner, left, (384, 56))
+shadowed(banner, right, (552, 96))
 
 banner.convert('RGB').save(os.path.join(STORE, 'banner.png'))
 print('banner.png', banner.size)
