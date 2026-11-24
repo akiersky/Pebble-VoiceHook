@@ -33,10 +33,10 @@ function cleanHeaders(raw, previous) {
   for (var i = 0; i < list.length; i++) {
     var name = stringValue(list[i] && list[i].name);
     if (!name) continue;
-    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) return { error: 'Header "' + name + '" is not a valid header name.' };
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) return { error: 'Header "' + name + '" is not a valid header name.', index: i, part: 'name' };
     var lower = name.toLowerCase();
-    if (FORBIDDEN_HEADERS.indexOf(lower) !== -1) return { error: 'The ' + name + ' header can\'t be set.' };
-    if (seen[lower]) return { error: 'Header "' + name + '" appears twice.' };
+    if (FORBIDDEN_HEADERS.indexOf(lower) !== -1) return { error: 'The ' + name + ' header can\'t be set.', index: i, part: 'name' };
+    if (seen[lower]) return { error: 'Header "' + name + '" appears twice.', index: i, part: 'name' };
     seen[lower] = true;
     var value = typeof list[i].value === 'string' ? list[i].value : '';
     // A blank value on a header that already had one means "keep the saved value".
@@ -44,23 +44,25 @@ function cleanHeaders(raw, previous) {
       var kept = previous.filter(function (header) { return header.name.toLowerCase() === lower; })[0];
       if (kept) value = kept.value;
     }
-    if (/[\r\n]/.test(value) || value.length > 2000) return { error: 'The value of ' + name + ' is not valid.' };
+    if (/[\r\n]/.test(value) || value.length > 2000) return { error: 'The value of ' + name + ' is not valid.', index: i, part: 'value' };
     out.push({ name: name, value: value });
   }
   return { headers: out };
 }
 
+// Errors carry a `target` saying which field is wrong, so the settings page can mark it.
 function cleanDestination(raw, previous) {
   var id = stringValue(raw && raw.id);
   if (!/^[A-Za-z0-9_-]{1,20}$/.test(id)) return { error: 'A destination has an invalid id.' };
   var name = stringValue(raw.name).slice(0, 40) || 'Webhook';
+  var at = function (field, extra) { return Object.assign({ kind: 'destination', id: id, field: field }, extra); };
   var parsed = parseUrl(raw.url);
-  if (parsed.error) return { error: name + ': ' + parsed.error };
+  if (parsed.error) return { error: name + ': ' + parsed.error, target: at('url') };
   var headers = cleanHeaders(raw.headers, previous && previous.headers);
-  if (headers.error) return { error: name + ': ' + headers.error };
+  if (headers.error) return { error: name + ': ' + headers.error, target: at('headers', { index: headers.index, part: headers.part }) };
   var format = raw.format === 'text' ? 'text' : 'json';
   var field = stringValue(raw.field) || 'text';
-  if (!/^[A-Za-z0-9_.-]{1,40}$/.test(field)) return { error: name + ': the JSON field name can only use letters, digits, _ . and -.' };
+  if (!/^[A-Za-z0-9_.-]{1,40}$/.test(field)) return { error: name + ': the JSON field name can only use letters, digits, _ . and -.', target: at('field') };
   return { destination: { id: id, name: name, url: parsed.url, host: parsed.host, https: parsed.https, headers: headers.headers, format: format, field: field } };
 }
 
@@ -77,7 +79,7 @@ function cleanConfig(message, previous) {
   for (var i = 0; i < list.length; i++) {
     var before = previous && findDestination(previous, stringValue(list[i] && list[i].id));
     var cleaned = cleanDestination(list[i], before);
-    if (cleaned.error) return { error: cleaned.error };
+    if (cleaned.error) return { error: cleaned.error, target: cleaned.target };
     if (seen[cleaned.destination.id]) return { error: 'A destination appears twice.' };
     seen[cleaned.destination.id] = true;
     destinations.push(cleaned.destination);
@@ -90,16 +92,18 @@ function cleanConfig(message, previous) {
     var raw = rawCommands[SLOTS[j]];
     var command = stringValue(raw && raw.command);
     if (!command) continue;
-    if (command.length > 100 || /[\u0000-\u001f]/.test(command)) return { error: 'A command is too long or has invalid characters.' };
+    var slotName = SLOTS[j].replace('_', ' ');
+    if (command.length > 100 || /[\u0000-\u001f]/.test(command)) return { error: 'Button ' + slotName + ': the command is too long or has invalid characters.', target: { kind: 'command', slot: SLOTS[j], field: 'command' } };
     var before = previous && previous.commands && previous.commands[SLOTS[j]];
     var extra = cleanHeaders(raw.headers, before && before.headers);
-    if (extra.error) return { error: 'Button ' + SLOTS[j].replace('_', ' ') + ': ' + extra.error };
+    if (extra.error) return { error: 'Button ' + slotName + ': ' + extra.error, target: { kind: 'command', slot: SLOTS[j], field: 'headers', index: extra.index, part: extra.part } };
     commands[SLOTS[j]] = { command: command, destination: seen[raw.destination] ? raw.destination : fallback, headers: extra.headers };
   }
   var rawLabels = message.labels && typeof message.labels === 'object' ? message.labels : {};
   var labels = { up: stringValue(rawLabels.up), down: stringValue(rawLabels.down) };
   if (labels.up.length > 24 || labels.down.length > 24 || /[\u0000-\u001f]/.test(labels.up + labels.down)) {
-    return { error: 'Button labels can be up to 24 characters.' };
+    var badLabel = labels.up.length > 24 || /[\u0000-\u001f]/.test(labels.up) ? 'up' : 'down';
+    return { error: 'Button reminders can be up to 24 characters.', target: { kind: 'label', field: badLabel } };
   }
   return { config: { v: 2, destinations: destinations, noteDestination: noteDestination, commands: commands, labels: labels } };
 }
@@ -165,6 +169,7 @@ async function permissionState(host) {
 // Sends a note or command and says what happened: { ok, status, message }. Never throws.
 async function deliver(destination, kind, value, doneText, extraHeaders) {
   var request = buildRequest(destination, kind, value, new Date(), extraHeaders);
+  console.log('Webhook sending to ' + destination.host + ' with headers: ' + Object.keys(request.options.headers).join(', '));
   try {
     var response = await fetch(request.url, request.options);
     if (response.status >= 200 && response.status < 300) {
@@ -306,7 +311,7 @@ Pebble.registerConfigHandler(async function (message, respond) {
       var previous = await loadConfig();
       var cleaned = cleanConfig(message, previous);
       if (cleaned.error) {
-        respond({ error: cleaned.error });
+        respond({ error: cleaned.error, target: cleaned.target });
         return;
       }
       await Pebble.secureStorage.setItem(CONFIG_KEY, JSON.stringify(cleaned.config));

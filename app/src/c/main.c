@@ -1,10 +1,13 @@
 // Webhook watchapp. Select dictates a note, Up/Down send fixed commands (press, double press, hold).
 // Everything is relayed to the phone over AppMessage; the phone side calls the bundled Webhook plugin.
 // Launched from a Quick Launch button, it starts dictating at once and closes after the confirmation.
+// The app closes by itself after a minute with nothing happening.
 #include <pebble.h>
 
 #define DICTATION_BUFFER 512
 #define REPLY_TIMEOUT_MS 20000
+#define IDLE_TIMEOUT_MS 60000
+#define MIC_ANIMATION_MS 380
 #define FAIL_ANIMATION_MS 700
 #define ICON_ANIMATION_MS 1100
 #define MIN_RESULT_SHOW_MS 1800
@@ -26,7 +29,7 @@
 
 enum { PersistUpLabel = 1, PersistDownLabel = 2 };
 
-typedef enum { StateIdle, StateSending, StateOk, StateFail } State;
+typedef enum { StateIdle, StateStarting, StateSending, StateOk, StateFail } State;
 typedef enum { IconRocket, IconThumbsUp, IconMusic, IconTide, IconSent } Icon;
 
 static Window *s_window;
@@ -36,8 +39,8 @@ static DictationSession *s_dictation;
 static AppTimer *s_frame_timer;
 static AppTimer *s_reset_timer;
 static AppTimer *s_timeout_timer;
-static GBitmap *s_mic;
-// Only the confirmation being shown is loaded, to keep memory low on the older watches.
+static AppTimer *s_idle_timer;
+// Only the picture being shown is loaded, to keep memory low on the older watches.
 static GBitmap *s_confirm_bitmap;
 static GDrawCommandSequence *s_sent_sequence;
 static State s_state = StateIdle;
@@ -45,6 +48,7 @@ static Icon s_confirm = IconThumbsUp;
 static int32_t s_anim_ms = ICON_ANIMATION_MS;
 static bool s_quick_launch = false;
 static bool s_dictating = false;
+static bool s_sending_voice = false;
 static time_t s_anim_start_s;
 static uint16_t s_anim_start_ms;
 static char s_message[96];
@@ -55,6 +59,108 @@ static const uint32_t ICON_RESOURCES[ICON_COUNT] = {
   RESOURCE_ID_IMAGE_ROCKET, RESOURCE_ID_IMAGE_THUMBS_UP, RESOURCE_ID_IMAGE_MUSIC, RESOURCE_ID_IMAGE_TIDE, 0,
 };
 
+// ---- the microphone, drawn in code so it can move, turn and grow. Coordinates are in half-units of the 80x80 artwork.
+typedef struct { int16_t x1, y1, x2, y2; uint8_t width; } MicLine;
+
+static const GPoint MIC_HEAD[8] = {
+  {90, 120}, {106, 104}, {106, 46}, {90, 30}, {72, 30}, {56, 46}, {56, 104}, {72, 120},
+};
+static const MicLine MIC_LINES[] = {
+  {81, 31, 81, 119, 3}, {55, 75, 105, 75, 3}, {105, 57, 81, 51, 3}, {81, 99, 105, 93, 3},
+  {57, 57, 81, 51, 3}, {81, 99, 57, 93, 3},
+  {117, 111, 95, 133, 3}, {95, 133, 67, 133, 3}, {67, 133, 45, 111, 3},
+  {81, 133, 81, 155, 3}, {62, 156, 100, 156, 4},
+};
+
+typedef struct { GPoint center; int scale_permille; int32_t angle; } MicPose;
+
+static GPoint prv_mic_point(int x, int y, MicPose pose) {
+  int dx = (x - 80) * 8;   // 1/16 of an artwork unit, from the artwork's centre
+  int dy = (y - 80) * 8;
+  int32_t c = cos_lookup(pose.angle);
+  int32_t s = sin_lookup(pose.angle);
+  int32_t rx = (dx * c - dy * s) / TRIG_MAX_RATIO;
+  int32_t ry = (dx * s + dy * c) / TRIG_MAX_RATIO;
+  return GPoint(pose.center.x + rx * pose.scale_permille / 16000, pose.center.y + ry * pose.scale_permille / 16000);
+}
+
+static void prv_mic_stroke(GContext *ctx, GPoint a, GPoint b, int width) {
+  graphics_context_set_stroke_width(ctx, width);
+  graphics_draw_line(ctx, a, b);
+  int radius = width / 2;
+  if (radius >= 1) {
+    graphics_fill_circle(ctx, a, radius);
+    graphics_fill_circle(ctx, b, radius);
+  }
+}
+
+static void prv_draw_mic(GContext *ctx, MicPose pose) {
+  GPoint head[8];
+  for (int i = 0; i < 8; i++) head[i] = prv_mic_point(MIC_HEAD[i].x, MIC_HEAD[i].y, pose);
+  GPathInfo info = { .num_points = 8, .points = head };
+  GPath *path = gpath_create(&info);
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  gpath_draw_filled(ctx, path);
+  gpath_destroy(path);
+
+  graphics_context_set_stroke_color(ctx, GColorBlack);
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  int head_width = 4 * pose.scale_permille / 1000;
+  if (head_width < 1) head_width = 1;
+  for (int i = 0; i < 8; i++) prv_mic_stroke(ctx, head[i], head[(i + 1) % 8], head_width);
+  for (unsigned i = 0; i < ARRAY_LENGTH(MIC_LINES); i++) {
+    int width = MIC_LINES[i].width * pose.scale_permille / 1000;
+    if (width < 1) width = 1;
+    prv_mic_stroke(ctx, prv_mic_point(MIC_LINES[i].x1, MIC_LINES[i].y1, pose),
+                   prv_mic_point(MIC_LINES[i].x2, MIC_LINES[i].y2, pose), width);
+  }
+}
+
+// Resting pose: turned 80 degrees, large, its head pointing toward the buttons and its base cut off by the left edge.
+static MicPose prv_idle_pose(GRect bounds) {
+  int head_edge = bounds.size.w * 62 / 100;
+  int scale = head_edge * 20;
+  return (MicPose) {
+    .center = GPoint(head_edge - 27 * scale / 1000 * 985 / 1000, bounds.size.h / 2 + bounds.size.h * 4 / 100),
+    .scale_permille = scale,
+    .angle = DEG_TO_TRIGANGLE(80),
+  };
+}
+
+// Where it ends up when recording starts: upright in the middle, where the system's recording screen shows its own.
+static MicPose prv_recording_pose(GRect bounds) {
+  return (MicPose) { .center = GPoint(bounds.size.w / 2, bounds.size.h / 2), .scale_permille = bounds.size.h * 6, .angle = 0 };
+}
+
+static int32_t prv_elapsed_ms(void) {
+  time_t now_s; uint16_t now_ms;
+  time_ms(&now_s, &now_ms);
+  return (int32_t)(now_s - s_anim_start_s) * 1000 + (int32_t)now_ms - (int32_t)s_anim_start_ms;
+}
+
+static void prv_restart_clock(void) {
+  time_ms(&s_anim_start_s, &s_anim_start_ms);
+}
+
+// Ease in and out; input and output are 0 to 1000.
+static int prv_ease(int t) {
+  if (t < 500) return 4 * t * t * t / 1000000;
+  int u = 1000 - t;
+  return 1000 - 4 * u * u * u / 1000000;
+}
+
+static MicPose prv_mic_in_flight(GRect bounds, int32_t elapsed) {
+  int t = elapsed >= MIC_ANIMATION_MS ? 1000 : (int)(elapsed * 1000 / MIC_ANIMATION_MS);
+  int e = prv_ease(t);
+  MicPose from = prv_idle_pose(bounds);
+  MicPose to = prv_recording_pose(bounds);
+  return (MicPose) {
+    .center = GPoint(from.center.x + (to.center.x - from.center.x) * e / 1000, from.center.y + (to.center.y - from.center.y) * e / 1000),
+    .scale_permille = from.scale_permille + (to.scale_permille - from.scale_permille) * e / 1000,
+    .angle = from.angle * (1000 - e) / 1000,
+  };
+}
+
 static GColor prv_confirm_background(Icon icon) {
   switch (icon) {
     case IconRocket: return PBL_IF_COLOR_ELSE(GColorPictonBlue, GColorWhite);
@@ -63,12 +169,6 @@ static GColor prv_confirm_background(Icon icon) {
     case IconTide: return PBL_IF_COLOR_ELSE(GColorYellow, GColorWhite);
     default: return PBL_IF_COLOR_ELSE(GColorMalachite, GColorWhite);
   }
-}
-
-static int32_t prv_elapsed_ms(void) {
-  time_t now_s; uint16_t now_ms;
-  time_ms(&now_s, &now_ms);
-  return (int32_t)(now_s - s_anim_start_s) * 1000 + (int32_t)now_ms - (int32_t)s_anim_start_ms;
 }
 
 // A swing that starts at +/-max_degrees, goes back and forth `swings` times and dies away by the end.
@@ -106,12 +206,14 @@ static int prv_edge_x(GRect bounds, int y) {
 #endif
 }
 
-static void prv_draw_arrow(GContext *ctx, GPoint from, GPoint to) {
+// Every arrow is the same size and the same distance from the edge, one for each button.
+static void prv_draw_button_arrow(GContext *ctx, GRect bounds, int y) {
+  int edge = prv_edge_x(bounds, y);
   graphics_context_set_stroke_color(ctx, GColorBlack);
   graphics_context_set_stroke_width(ctx, 3);
-  graphics_draw_line(ctx, from, to);
-  graphics_draw_line(ctx, to, GPoint(to.x - 8, to.y - 7));
-  graphics_draw_line(ctx, to, GPoint(to.x - 8, to.y + 7));
+  graphics_draw_line(ctx, GPoint(edge - 20, y), GPoint(edge, y));
+  graphics_draw_line(ctx, GPoint(edge, y), GPoint(edge - 8, y - 7));
+  graphics_draw_line(ctx, GPoint(edge, y), GPoint(edge - 8, y + 7));
 }
 
 // A reminder the user wrote, right-aligned beside an arrow pointing at its button.
@@ -123,7 +225,7 @@ static void prv_draw_button_label(GContext *ctx, GRect bounds, int y, const char
   graphics_context_set_text_color(ctx, GColorBlack);
   graphics_draw_text(ctx, text, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD), rect,
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
-  prv_draw_arrow(ctx, GPoint(edge - 20, y), GPoint(edge, y));
+  prv_draw_button_arrow(ctx, bounds, y);
 }
 
 static void prv_draw_cross(GContext *ctx, GPoint center, int size, int32_t elapsed) {
@@ -191,13 +293,6 @@ static void prv_draw_confirm(GContext *ctx, GPoint center, int32_t elapsed) {
   }
 }
 
-// The big microphone image bleeds off the left edge; the arrow sits halfway between it and the Select button.
-static GRect prv_mic_rect(GRect bounds) {
-  GRect image = gbitmap_get_bounds(s_mic);
-  // A little below the middle, so it stays clear of the labels at the top and bottom.
-  return GRect(0, (bounds.size.h - image.size.h) / 2 + bounds.size.h * 4 / 100, image.size.w, image.size.h);
-}
-
 static void prv_canvas_update(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   graphics_context_set_compositing_mode(ctx, GCompOpSet);
@@ -210,33 +305,45 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
   int32_t elapsed = prv_elapsed_ms();
   GPoint center = GPoint(bounds.size.w / 2, bounds.size.h * 38 / 100);
   switch (s_state) {
-    case StateIdle: {
-      GRect mic = prv_mic_rect(bounds);
-      int mid = bounds.size.h / 2;
-      graphics_draw_bitmap_in_rect(ctx, s_mic, mic);
-      int from_x = mic.size.w + 2;
-      int to_x = prv_edge_x(bounds, mid);
-      int length = (to_x - from_x) * 3 / 5;
-      if (length < 22) length = 22;
-      int middle = (from_x + to_x) / 2;
-      prv_draw_arrow(ctx, GPoint(middle - length / 2, mid), GPoint(middle + length / 2, mid));
+    case StateIdle:
+      prv_draw_mic(ctx, prv_idle_pose(bounds));
+      prv_draw_button_arrow(ctx, bounds, bounds.size.h / 2);
       prv_draw_button_label(ctx, bounds, bounds.size.h * 17 / 100, s_up_label);
       prv_draw_button_label(ctx, bounds, bounds.size.h * 83 / 100, s_down_label);
       break;
-    }
+    case StateStarting:
+      prv_draw_mic(ctx, prv_mic_in_flight(bounds, elapsed));
+      break;
+    case StateSending:
+      break;
     case StateOk:
       prv_draw_confirm(ctx, center, elapsed);
       break;
     case StateFail:
       prv_draw_cross(ctx, center, ICON_SIZE, elapsed);
       break;
-    case StateSending:
-      break;
   }
 }
 
 static void prv_cancel(AppTimer **timer) {
   if (*timer) { app_timer_cancel(*timer); *timer = NULL; }
+}
+
+// ---- closing after a minute of nothing
+static void prv_idle_expired(void *data);
+
+static void prv_activity(void) {
+  prv_cancel(&s_idle_timer);
+  s_idle_timer = app_timer_register(IDLE_TIMEOUT_MS, prv_idle_expired, NULL);
+}
+
+static void prv_idle_expired(void *data) {
+  s_idle_timer = NULL;
+  if (s_dictating || s_state == StateSending || s_state == StateStarting) {
+    prv_activity();   // busy, look again in a minute
+    return;
+  }
+  window_stack_pop_all(true);
 }
 
 // The Sent animation is drawn in an 80x80 box; scale every point and stroke once, when it is loaded.
@@ -262,11 +369,14 @@ static void prv_free_confirm(void) {
   if (s_sent_sequence) { gdraw_command_sequence_destroy(s_sent_sequence); s_sent_sequence = NULL; }
 }
 
-// Picks a different celebration than last time and loads just that one.
-static void prv_pick_confirm(void) {
+// A voice note always gets the paper plane. A button command gets one of the others, never the same as last time.
+static void prv_pick_confirm(bool voice_note) {
   prv_free_confirm();
-  Icon next = (Icon)(rand() % ICON_COUNT);
-  if (next == s_confirm) next = (Icon)((next + 1) % ICON_COUNT);
+  Icon next = IconSent;
+  if (!voice_note) {
+    next = (Icon)(rand() % IconSent);
+    if (next == s_confirm) next = (Icon)((next + 1) % IconSent);
+  }
   s_anim_ms = ICON_ANIMATION_MS;
   if (next == IconSent) {
     s_sent_sequence = gdraw_command_sequence_create_with_resource(RESOURCE_ID_SENT_ANIM);
@@ -287,15 +397,32 @@ static void prv_pick_confirm(void) {
 static void prv_set_message(const char *text) {
   snprintf(s_message, sizeof(s_message), "%s", text);
   text_layer_set_text(s_message_layer, s_message);
-  layer_set_hidden(text_layer_get_layer(s_message_layer), s_state == StateIdle);
+  layer_set_hidden(text_layer_get_layer(s_message_layer), s_state == StateIdle || s_state == StateStarting);
 }
 
 static void prv_frame(void *data) {
   s_frame_timer = NULL;
   layer_mark_dirty(s_canvas);
-  if ((s_state == StateOk || s_state == StateFail) && prv_elapsed_ms() < s_anim_ms) {
-    s_frame_timer = app_timer_register(FRAME_MS, prv_frame, NULL);
+  int32_t elapsed = prv_elapsed_ms();
+  if (s_state == StateStarting && elapsed >= MIC_ANIMATION_MS) {
+    // The microphone has reached the recording position: now listen.
+    if (!s_dictating) {
+      s_dictating = true;
+      dictation_session_start(s_dictation);
+    }
+    return;
   }
+  bool going = (s_state == StateStarting) ||
+               ((s_state == StateOk || s_state == StateFail) && elapsed < s_anim_ms);
+  if (going) s_frame_timer = app_timer_register(FRAME_MS, prv_frame, NULL);
+}
+
+static void prv_back_to_idle(void) {
+  prv_cancel(&s_frame_timer);
+  s_state = StateIdle;
+  prv_free_confirm();
+  prv_set_message("");
+  layer_mark_dirty(s_canvas);
 }
 
 static void prv_reset(void *data) {
@@ -304,28 +431,26 @@ static void prv_reset(void *data) {
     window_stack_pop_all(true);
     return;
   }
-  s_state = StateIdle;
-  prv_free_confirm();
-  prv_set_message("");
-  layer_mark_dirty(s_canvas);
+  prv_back_to_idle();
 }
 
 static void prv_show(State state, const char *text) {
+  prv_activity();
   prv_cancel(&s_timeout_timer);
   prv_cancel(&s_reset_timer);
   prv_cancel(&s_frame_timer);
   s_state = state;
   prv_set_message(text);
   if (state == StateOk || state == StateFail) {
+    prv_free_confirm();
     if (state == StateOk) {
-      prv_pick_confirm();
+      prv_pick_confirm(s_sending_voice);
       vibes_short_pulse();
     } else {
-      prv_free_confirm();
       s_anim_ms = FAIL_ANIMATION_MS;
       vibes_double_pulse();
     }
-    time_ms(&s_anim_start_s, &s_anim_start_ms);
+    prv_restart_clock();
     s_frame_timer = app_timer_register(FRAME_MS, prv_frame, NULL);
     int show_ms = s_anim_ms + 700;
     s_reset_timer = app_timer_register(show_ms > MIN_RESULT_SHOW_MS ? show_ms : MIN_RESULT_SHOW_MS, prv_reset, NULL);
@@ -341,6 +466,7 @@ static void prv_timed_out(void *data) {
 // Sends either dictated text (text != NULL) or a button slot (1 to 6).
 static void prv_send(const char *text, int slot) {
   DictionaryIterator *iter;
+  s_sending_voice = text != NULL;
   if (app_message_outbox_begin(&iter) != APP_MSG_OK) {
     prv_show(StateFail, "Phone not connected");
     return;
@@ -382,24 +508,28 @@ static void prv_outbox_failed(DictionaryIterator *iter, AppMessageResult reason,
 
 static void prv_dictation(DictationSession *session, DictationSessionStatus status, char *transcription, void *context) {
   s_dictating = false;
+  prv_activity();
   if (status == DictationSessionStatusSuccess && transcription && transcription[0]) {
     prv_send(transcription, 0);
     return;
   }
   // Cancelled, rejected or failed: the system already showed its own dialog if needed.
   if (s_quick_launch) window_stack_pop_all(true);
+  else prv_back_to_idle();
 }
 
+// The microphone swings to the middle and stands up, then recording begins (see prv_frame).
 static void prv_start_dictation(void) {
-  if (s_state == StateSending) return;
+  if (s_state == StateSending || s_state == StateStarting) return;
+  prv_activity();
   prv_cancel(&s_reset_timer);
   prv_cancel(&s_frame_timer);
-  s_state = StateIdle;
   prv_free_confirm();
+  s_state = StateStarting;
   prv_set_message("");
+  prv_restart_clock();
+  s_frame_timer = app_timer_register(FRAME_MS, prv_frame, NULL);
   layer_mark_dirty(s_canvas);
-  s_dictating = true;
-  dictation_session_start(s_dictation);
 }
 
 static void prv_select(ClickRecognizerRef recognizer, void *context) { prv_start_dictation(); }
@@ -407,8 +537,12 @@ static void prv_select(ClickRecognizerRef recognizer, void *context) { prv_start
 #if defined(_PBL_API_EXISTS_touch_service_subscribe)
 // On watches with a touchscreen, tapping the microphone starts a voice note too.
 static void prv_touch(const TouchEvent *event, void *context) {
+  prv_activity();
   if (event->type != TouchEvent_Touchdown || s_state != StateIdle || s_dictating) return;
-  GRect mic = grect_crop(prv_mic_rect(layer_get_bounds(window_get_root_layer(s_window))), -12);
+  GRect bounds = layer_get_bounds(window_get_root_layer(s_window));
+  MicPose pose = prv_idle_pose(bounds);
+  // The microphone's visible area: around its head, which is the part on screen.
+  GRect mic = GRect(0, pose.center.y - bounds.size.h / 4, pose.center.x + bounds.size.w / 5, bounds.size.h / 2);
   GPoint point = GPoint(event->x, event->y);
   if (grect_contains_point(&mic, &point)) prv_start_dictation();
 }
@@ -417,7 +551,8 @@ static void prv_touch(const TouchEvent *event, void *context) {
 static void prv_quick_start(void *data) { prv_start_dictation(); }
 
 static void prv_command(int slot) {
-  if (s_state == StateSending) return;
+  prv_activity();
+  if (s_state == StateSending || s_state == StateStarting) return;
   prv_send(NULL, slot);
 }
 
@@ -442,8 +577,6 @@ static void prv_window_load(Window *window) {
   Layer *root = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(root);
 
-  s_mic = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_MIC);
-
   s_canvas = layer_create(bounds);
   layer_set_update_proc(s_canvas, prv_canvas_update);
   layer_add_child(root, s_canvas);
@@ -461,7 +594,6 @@ static void prv_window_load(Window *window) {
 static void prv_window_unload(Window *window) {
   text_layer_destroy(s_message_layer);
   layer_destroy(s_canvas);
-  gbitmap_destroy(s_mic);
   prv_free_confirm();
 }
 
@@ -483,6 +615,7 @@ static void prv_init(void) {
   window_set_click_config_provider(s_window, prv_click_config);
   window_set_window_handlers(s_window, (WindowHandlers) { .load = prv_window_load, .unload = prv_window_unload });
   window_stack_push(s_window, true);
+  prv_activity();
   if (s_quick_launch) app_timer_register(300, prv_quick_start, NULL);
 #if defined(_PBL_API_EXISTS_touch_service_subscribe)
   if (touch_service_is_enabled()) touch_service_subscribe(prv_touch, NULL);
@@ -496,6 +629,7 @@ static void prv_deinit(void) {
   prv_cancel(&s_frame_timer);
   prv_cancel(&s_reset_timer);
   prv_cancel(&s_timeout_timer);
+  prv_cancel(&s_idle_timer);
   dictation_session_destroy(s_dictation);
   window_destroy(s_window);
 }

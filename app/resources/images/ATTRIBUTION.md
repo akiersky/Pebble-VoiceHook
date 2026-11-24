@@ -2,7 +2,6 @@
 
 The icons in this folder are from https://github.com/pebble-dev/iconography (Apache License 2.0):
 
-- `mic_*.png`: `pebbleos/Pebble_80x80_Microphone.svg`, turned 80 degrees and enlarged (see `tools/render-art.py`)
 - `thumbs_up.png`: `pebbleos/Pebble_80x80_Thumbs_up.svg`
 - `music.png`: `pebbleos/Pebble_80x80_Music_event.svg`
 - `tide.png`: `pebbleos/Pebble_80x80_Tide_is_high.svg`

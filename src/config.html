@@ -9,13 +9,13 @@
       color-scheme: light dark;
       --bg: #f4f5f8; --card: #ffffff; --text: #1b1d24; --muted: #6b7080; --line: #dde0e8;
       --accent: #4772fa; --accent-text: #ffffff; --soft: rgba(71,114,250,.12);
-      --ok-bg: #e3f5e8; --ok-text: #14532d; --err-bg: #fde4e4; --err-text: #7f1d1d; --warn-bg: #fdecc8; --warn-text: #5c3d00;
+      --danger: #b42318; --danger-soft: rgba(180,35,24,.16); --ok-bg: #e3f5e8; --ok-text: #14532d; --err-bg: #fde4e4; --err-text: #7f1d1d; --warn-bg: #fdecc8; --warn-text: #5c3d00;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #101218; --card: #1a1d26; --text: #eceef4; --muted: #9aa0b3; --line: #2c3040;
         --accent: #668dff; --accent-text: #0b1020; --soft: rgba(102,141,255,.16);
-        --ok-bg: #12301d; --ok-text: #b7ebc6; --err-bg: #3a1717; --err-text: #ffc9c9; --warn-bg: #3a2c0c; --warn-text: #fbd98a;
+        --danger: #ff8a80; --danger-soft: rgba(255,138,128,.2); --ok-bg: #12301d; --ok-text: #b7ebc6; --err-bg: #3a1717; --err-text: #ffc9c9; --warn-bg: #3a2c0c; --warn-text: #fbd98a;
       }
     }
     * { box-sizing: border-box; }
@@ -41,6 +41,9 @@
       background: var(--bg); color: inherit; outline: none;
     }
     input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--soft); }
+    input.invalid, select.invalid { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+    .field-error { color: var(--danger); font-size: 13px; font-weight: 600; margin: 4px 0 8px; }
+    .field-error::before { content: "\26A0\FE0E  "; }
     .hint { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
     code { background: var(--soft); padding: 1px 5px; border-radius: 5px; font-size: 12.5px; }
 
@@ -164,13 +167,51 @@
       return node;
     }
 
-    function labelled(text, input) { return [el('label', { textContent: text }), input]; }
+    var fieldCount = 0;
+    function linkLabel(label, input) {
+      if (!input.id) input.id = 'field' + (++fieldCount);
+      label.htmlFor = input.id;
+      return label;
+    }
+    function labelled(text, input) { return [linkLabel(el('label', { textContent: text }), input), input]; }
+
+    // ----- field errors: red outline, a message, aria-invalid/aria-describedby, and focus -----
+    function clearInvalid(input) {
+      if (!input || !input.classList || !input.classList.contains('invalid')) return;
+      input.classList.remove('invalid');
+      input.removeAttribute('aria-invalid');
+      input.removeAttribute('aria-describedby');
+      if (input.errorNote) { input.errorNote.remove(); input.errorNote = null; }
+    }
+
+    function clearAllInvalid() {
+      Array.prototype.forEach.call(document.querySelectorAll('.invalid'), clearInvalid);
+    }
+
+    function markInvalid(input, message, anchor) {
+      clearInvalid(input);
+      var note = el('p', { className: 'field-error', textContent: message });
+      note.id = 'error' + (++fieldCount);
+      note.setAttribute('role', 'alert');
+      input.classList.add('invalid');
+      input.setAttribute('aria-invalid', 'true');
+      input.setAttribute('aria-describedby', note.id);
+      input.errorNote = note;
+      (anchor || input).insertAdjacentElement('afterend', note);
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      input.focus();
+    }
+
+    document.addEventListener('input', function (event) { clearInvalid(event.target); });
+    document.addEventListener('change', function (event) { clearInvalid(event.target); });
 
     // ----- destinations -----
     function addHeaderRow(box, name, hasValue) {
       var row = el('div', { className: 'header-row' });
       var nameInput = el('input', { type: 'text', placeholder: 'Name', autocapitalize: 'none', spellcheck: false, value: name || '' });
+      nameInput.setAttribute('aria-label', 'Header name');
       var valueInput = el('input', { type: 'password', autocomplete: 'off', spellcheck: false, placeholder: hasValue ? 'Saved' : 'Value' });
+      valueInput.setAttribute('aria-label', 'Header value');
       var remove = el('button', { type: 'button', className: 'secondary remove', textContent: '×' });
       remove.setAttribute('aria-label', 'Remove header');
       remove.onclick = function () { row.remove(); };
@@ -230,6 +271,8 @@
         };
       };
       card.label = function () { return nameInput.value.trim() || 'New destination'; };
+      card.fields = { name: nameInput, url: urlInput, field: field, headers: headers };
+      urlInput.setAttribute('aria-required', 'true');
       destinationsBox.appendChild(card);
       refreshTitle();
       return card;
@@ -296,10 +339,10 @@
         more.open = (entry.headers || []).length > 0;
         var row = el('div', { className: 'command' }, [
           el('h3', { textContent: slot[1] }),
-          el('label', { textContent: 'Command' }), input,
-          el('label', { textContent: 'Webhook' }), select, more
+          linkLabel(el('label', { textContent: 'Command' }), input), input,
+          linkLabel(el('label', { textContent: 'Webhook' }), select), select, more
         ]);
-        row.slot = slot[0]; row.input = input; row.destination = select; row.headers = headers;
+        row.slot = slot[0]; row.input = input; row.destination = select; row.headers = headers; row.more = more;
         (slot[0].indexOf('up_') === 0 ? commandsUp : commandsDown).appendChild(row);
         fillSelect(select, entry.destination);
       });
@@ -339,13 +382,49 @@
       return card ? card.label() : 'the destination';
     }
 
+    // Marks the field the plugin says is wrong. Returns true if it found one.
+    function applyError(result) {
+      var target = result.target;
+      if (!target) return false;
+      var input = null;
+      var anchor = null;
+      var card = null;
+      if (target.kind === 'destination') {
+        card = Array.prototype.filter.call(destinationsBox.children, function (c) { return c.dataset.id === target.id; })[0];
+        if (!card) return false;
+        card.open = true;
+        if (target.field === 'headers') {
+          anchor = card.fields.headers.children[target.index];
+          input = anchor && anchor.children[target.part === 'value' ? 1 : 0];
+        } else {
+          input = card.fields[target.field];
+        }
+      } else if (target.kind === 'command') {
+        var row = commandRows().filter(function (r) { return r.slot === target.slot; })[0];
+        if (!row) return false;
+        if (target.field === 'headers') {
+          row.more.open = true;
+          anchor = row.headers.children[target.index];
+          input = anchor && anchor.children[target.part === 'value' ? 1 : 0];
+        } else {
+          input = row.input;
+        }
+      } else if (target.kind === 'label') {
+        input = target.field === 'up' ? labelUp : labelDown;
+      }
+      if (!input) return false;
+      markInvalid(input, result.error, anchor);
+      return true;
+    }
+
     // Saves everything. With a destination id, also sends that destination a test message.
     async function saveAll(testId) {
       setBusy(true);
+      clearAllInvalid();
       setStatus('Saving…');
       try {
         var result = await send({ type: 'save', destinations: readDestinations(), noteDestination: noteSelect.value, commands: readCommands(), labels: { up: labelUp.value, down: labelDown.value } });
-        if (result.error) { setStatus(result.error, 'error'); return; }
+        if (result.error) { applyError(result); setStatus(result.error, 'error'); return; }
         var openIds = Array.prototype.filter.call(destinationsBox.children, function (c) { return c.open; }).map(function (c) { return c.dataset.id; });
         showState(result);
         Array.prototype.forEach.call(destinationsBox.children, function (c) { c.open = openIds.indexOf(c.dataset.id) !== -1; });

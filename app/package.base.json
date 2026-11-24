@@ -1,7 +1,7 @@
 {
   "name": "webhook-app",
   "author": "kiersky",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "keywords": [
     "pebble-app"
   ],
@@ -38,40 +38,6 @@
           "name": "IMAGE_MENU_ICON",
           "file": "images/menu_icon.png",
           "menuIcon": true
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_MIC",
-          "file": "images/mic_144x168.png",
-          "targetPlatforms": [
-            "basalt",
-            "diorite",
-            "flint"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_MIC",
-          "file": "images/mic_180x180.png",
-          "targetPlatforms": [
-            "chalk"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_MIC",
-          "file": "images/mic_200x228.png",
-          "targetPlatforms": [
-            "emery"
-          ]
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_MIC",
-          "file": "images/mic_260x260.png",
-          "targetPlatforms": [
-            "gabbro"
-          ]
         },
         {
           "type": "raw",
