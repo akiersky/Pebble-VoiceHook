@@ -51,3 +51,15 @@ for name, (w, h) in SIZES.items():
     top, bottom = max(0, int(mid) - half), min(h, int(mid) + half)
     image.crop((0, top, box[2] + 1, bottom)).save(os.path.join(IMAGES, f'mic_{name}.png'))
     print(name, 'mic image', box[2] + 1, 'x', bottom - top)
+
+# ---- confirmation icons, one size per screen class (about 70% of the screen width)
+ICON_SIZES = {'144x168': 104, '180x180': 128, '200x228': 144, '260x260': 188}
+CONFIRM = {'rocket': '80px_Rocket.svg', 'thumbs_up': 'Pebble_80x80_Thumbs_up.svg',
+           'music': 'Pebble_80x80_Music_event.svg', 'tide': 'Pebble_80x80_Tide_is_high.svg'}
+for screen, size in ICON_SIZES.items():
+    for name, source in CONFIRM.items():
+        svg = open(os.path.join(ART, source)).read()
+        image = render(svg, size, size)
+        square = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        square.paste(image, ((size - image.width) // 2, (size - image.height) // 2))   # some are narrower than tall
+        square.save(os.path.join(IMAGES, f'{name}_{screen}.png'))

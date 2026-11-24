@@ -12,6 +12,18 @@
 #define LABEL_MAX 25
 #define ICON_COUNT 5
 
+// Confirmation icons are drawn at about 70% of the screen width; the images are made at these sizes.
+#if defined(PBL_PLATFORM_GABBRO)
+#define ICON_SIZE 188
+#elif defined(PBL_PLATFORM_EMERY)
+#define ICON_SIZE 144
+#elif defined(PBL_PLATFORM_CHALK)
+#define ICON_SIZE 128
+#else
+#define ICON_SIZE 104
+#endif
+#define ICON_HALF (ICON_SIZE / 2)
+
 enum { PersistUpLabel = 1, PersistDownLabel = 2 };
 
 typedef enum { StateIdle, StateSending, StateOk, StateFail } State;
@@ -130,9 +142,9 @@ static void prv_draw_cross(GContext *ctx, GPoint center, int size, int32_t elaps
 
 static void prv_draw_icon(GContext *ctx, GPoint at, int32_t angle) {
   if (angle == 0) {
-    graphics_draw_bitmap_in_rect(ctx, s_confirm_bitmap, GRect(at.x - 40, at.y - 40, 80, 80));
+    graphics_draw_bitmap_in_rect(ctx, s_confirm_bitmap, GRect(at.x - ICON_HALF, at.y - ICON_HALF, ICON_SIZE, ICON_SIZE));
   } else {
-    graphics_draw_rotated_bitmap(ctx, s_confirm_bitmap, GPoint(40, 40), angle, at);
+    graphics_draw_rotated_bitmap(ctx, s_confirm_bitmap, GPoint(ICON_HALF, ICON_HALF), angle, at);
   }
 }
 
@@ -148,7 +160,7 @@ static void prv_draw_confirm(GContext *ctx, GPoint center, int32_t elapsed) {
         at.y += (t / 30) % 2 ? 2 : -2;
       } else if (t < 1000) {
         int32_t u = t - 300;
-        int dist = u * u / 2200;
+        int dist = u * u / 2200 * ICON_SIZE / 80;
         at.x += dist * 7 / 10;
         at.y -= dist * 7 / 10;
       } else {
@@ -159,7 +171,7 @@ static void prv_draw_confirm(GContext *ctx, GPoint center, int32_t elapsed) {
     }
     case IconThumbsUp:
       // Drops in, bounces, and wobbles as it settles.
-      prv_draw_icon(ctx, GPoint(center.x, center.y + prv_bounce_offset(t, 60)), prv_swing(t, 3, 22, 100));
+      prv_draw_icon(ctx, GPoint(center.x, center.y + prv_bounce_offset(t, ICON_SIZE * 3 / 4)), prv_swing(t, 3, 22, 100));
       break;
     case IconMusic:
       // Rocking side to side to the beat, hopping on each swing.
@@ -173,7 +185,7 @@ static void prv_draw_confirm(GContext *ctx, GPoint center, int32_t elapsed) {
       if (s_sent_sequence) {
         int32_t last = (int32_t)gdraw_command_sequence_get_total_duration(s_sent_sequence) - 1;
         GDrawCommandFrame *frame = gdraw_command_sequence_get_frame_by_elapsed(s_sent_sequence, t < last ? t : last);
-        if (frame) gdraw_command_frame_draw(ctx, s_sent_sequence, frame, GPoint(center.x - 40, center.y - 40));
+        if (frame) gdraw_command_frame_draw(ctx, s_sent_sequence, frame, GPoint(center.x - ICON_HALF, center.y - ICON_HALF));
       }
       break;
   }
@@ -196,7 +208,7 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
 
   int32_t elapsed = prv_elapsed_ms();
-  GPoint center = GPoint(bounds.size.w / 2, bounds.size.h * 4 / 10);
+  GPoint center = GPoint(bounds.size.w / 2, bounds.size.h * 38 / 100);
   switch (s_state) {
     case StateIdle: {
       GRect mic = prv_mic_rect(bounds);
@@ -216,7 +228,7 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
       prv_draw_confirm(ctx, center, elapsed);
       break;
     case StateFail:
-      prv_draw_cross(ctx, center, 80, elapsed);
+      prv_draw_cross(ctx, center, ICON_SIZE, elapsed);
       break;
     case StateSending:
       break;
@@ -225,6 +237,24 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
 
 static void prv_cancel(AppTimer **timer) {
   if (*timer) { app_timer_cancel(*timer); *timer = NULL; }
+}
+
+// The Sent animation is drawn in an 80x80 box; scale every point and stroke once, when it is loaded.
+static void prv_scale_sequence(GDrawCommandSequence *sequence) {
+  uint32_t frames = gdraw_command_sequence_get_num_frames(sequence);
+  for (uint32_t i = 0; i < frames; i++) {
+    GDrawCommandList *list = gdraw_command_frame_get_command_list(gdraw_command_sequence_get_frame_by_index(sequence, i));
+    uint32_t commands = gdraw_command_list_get_num_commands(list);
+    for (uint32_t j = 0; j < commands; j++) {
+      GDrawCommand *command = gdraw_command_list_get_command(list, j);
+      uint16_t points = gdraw_command_get_num_points(command);
+      for (uint16_t k = 0; k < points; k++) {
+        GPoint point = gdraw_command_get_point(command, k);
+        gdraw_command_set_point(command, k, GPoint(point.x * ICON_SIZE / 80, point.y * ICON_SIZE / 80));
+      }
+      gdraw_command_set_stroke_width(command, gdraw_command_get_stroke_width(command) * ICON_SIZE / 80);
+    }
+  }
 }
 
 static void prv_free_confirm(void) {
@@ -241,6 +271,7 @@ static void prv_pick_confirm(void) {
   if (next == IconSent) {
     s_sent_sequence = gdraw_command_sequence_create_with_resource(RESOURCE_ID_SENT_ANIM);
     if (s_sent_sequence) {
+      prv_scale_sequence(s_sent_sequence);
       s_anim_ms = (int32_t)gdraw_command_sequence_get_total_duration(s_sent_sequence);
     } else {
       next = IconThumbsUp;
@@ -417,7 +448,7 @@ static void prv_window_load(Window *window) {
   layer_set_update_proc(s_canvas, prv_canvas_update);
   layer_add_child(root, s_canvas);
 
-  int message_y = bounds.size.h * 66 / 100;
+  int message_y = bounds.size.h * 69 / 100;
   s_message_layer = text_layer_create(GRect(10, message_y, bounds.size.w - 20, bounds.size.h - message_y - 6));
   text_layer_set_font(s_message_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(s_message_layer, GTextAlignmentCenter);
