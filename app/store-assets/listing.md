@@ -39,7 +39,6 @@ First release: voice notes, six button commands, multiple webhooks with custom h
 
 ## Permissions (as shown to the user)
 - InvokeAction: "To send your notes and button commands through the VoiceHook plugin" (required)
-- Timeline: "To put a \"Send note\" pin on your watch's timeline" (optional)
 - Internet: not declared. Each webhook host is approved by the user the first time it is used.
 
 ## Links

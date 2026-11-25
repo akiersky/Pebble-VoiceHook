@@ -2,7 +2,7 @@
 
 - **Webhook** (in the code, a *destination*): a named URL with its own headers and format. Up to 10. The
   settings page and the watch say "webhook"; the code and the contract say `destination`.
-- **Note**: dictated text sent with the Select button (or the timeline pin). Goes to the voice-note webhook.
+- **Note**: dictated text sent with the Select button. Goes to the voice-note webhook.
   Confirmed with the paper plane.
 - **Command**: a fixed word the user chose for a button slot, sent as `{"command": "<name>"}`.
 - **Slot**: one of the six button gestures (Up or Down, each as press, double press, hold). Listed once in

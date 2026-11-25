@@ -150,13 +150,10 @@ test('the http warning is still there when the page is reopened', async () => {
   assert.match(warning.textContent, /without encryption/);
 });
 
-test('the timeline pin button adds the pin, and Clear settings empties the page', async () => {
+test('Clear settings empties the page', async () => {
   const t = await start();
   await fillBasic(t, 'https://x.test/h');
   await t.click(t.document.querySelector('#save'));
-  await t.click(t.document.querySelector('#pin'));
-  assert.strictEqual(t.pins.length, 1);
-  assert.match(t.document.querySelector('#status').textContent, /Pin added/);
 
   await t.click(t.document.querySelector('#unlink'));
   await t.click(t.document.querySelector('#unlink'));   // the first tap only asks for confirmation
@@ -281,11 +278,9 @@ test('each button command is one collapsed row that says what it does', async ()
 test('the page shows what fits the product it is part of', async () => {
   const plugin = await start();
   assert.ok(plugin.document.getElementById('reminderUp').hidden);
-  assert.ok(!plugin.document.getElementById('pinSection').hidden);
 
   const watchapp = await start({ watchapp: true });
   assert.ok(!watchapp.document.getElementById('reminderUp').hidden);
-  assert.ok(watchapp.document.getElementById('pinSection').hidden);
 });
 
 test('first-run steps show until something is saved', async () => {

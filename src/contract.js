@@ -13,7 +13,6 @@
 //   status                                 -> settings summary
 //   save   { destinations, noteDestination, commands, labels } -> settings summary, or { error, target }
 //   test   { destination }                 -> { ok, message, permission, host } or { error }
-//   pin                                    -> { ok, message } or { error }
 //   unlink                                 -> empty settings summary
 // An error may carry a `target` naming the field to mark:
 //   { kind: 'destination', id, field: 'url' | 'headers' | 'field', index?, part? }
@@ -23,7 +22,7 @@
 // `index` is the row of a header list and `part` is 'name' or 'value'.
 // <inline>
 var Contract = {
-  MESSAGES: { STATUS: 'status', SAVE: 'save', TEST: 'test', PIN: 'pin', UNLINK: 'unlink' },
+  MESSAGES: { STATUS: 'status', SAVE: 'save', TEST: 'test', UNLINK: 'unlink' },
   LIMITS: { HEADERS: 10, DESTINATIONS: 10, LABEL: 24, COMMAND: 100, HEADER_NAME: 100, HEADER_VALUE: 2000, URL: 2000, TEXT: 8000, NAME: 40 },
   TARGETS: { DESTINATION: 'destination', COMMAND: 'command', NOTE: 'note', LABEL: 'label' },
   FIELDS: { URL: 'url', HEADERS: 'headers', JSON_FIELD: 'field', COMMAND: 'command', DESTINATION: 'destination', UP: 'up', DOWN: 'down' },

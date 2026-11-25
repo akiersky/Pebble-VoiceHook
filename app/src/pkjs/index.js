@@ -3,7 +3,7 @@
 var PLUGIN_UUID = 'c0756590-bd59-464d-82f3-acd4499077d4';
 // ---- shared contract: generated from src/contract.js by `npm run contract`, do not edit ----
 var Contract = {
-  MESSAGES: { STATUS: 'status', SAVE: 'save', TEST: 'test', PIN: 'pin', UNLINK: 'unlink' },
+  MESSAGES: { STATUS: 'status', SAVE: 'save', TEST: 'test', UNLINK: 'unlink' },
   LIMITS: { HEADERS: 10, DESTINATIONS: 10, LABEL: 24, COMMAND: 100, HEADER_NAME: 100, HEADER_VALUE: 2000, URL: 2000, TEXT: 8000, NAME: 40 },
   TARGETS: { DESTINATION: 'destination', COMMAND: 'command', NOTE: 'note', LABEL: 'label' },
   FIELDS: { URL: 'url', HEADERS: 'headers', JSON_FIELD: 'field', COMMAND: 'command', DESTINATION: 'destination', UP: 'up', DOWN: 'down' },

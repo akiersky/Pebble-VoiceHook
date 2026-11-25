@@ -77,7 +77,6 @@ test('settings that point at a removed webhook give an error instead of throwing
   const t = await start({ store });
   assert.match((await t.action({ action: 'send_message', args: { text: 'hi' } })).message, /removed/);
   assert.match((await t.action({ action: 'send_command', args: { slot: 'up_single' } })).message, /removed/);
-  assert.strictEqual((await t.window.Pebble.sendMessage('plugin', { type: 'pin' })).ok, true);   // the pin still works
   assert.strictEqual(t.fetches.length, 0);
 });
 

@@ -16,7 +16,6 @@ Callers can't read headers or choose a host: everything goes to the webhooks the
 SET UP
 1. Open Webhook Actions' settings in the Pebble app and add one or more webhooks: URL, optional headers, JSON or plain-text body.
 2. Tap "Save & send test message" and allow the connection when your phone asks.
-3. Optional: add a "Send note" pin to the watch timeline, so you can dictate a note from the timeline.
 
 PRIVATE BY DESIGN
 Messages go only to the URLs you enter. Nothing is sent to the developer or any third party. URLs and header values stay in your phone's encrypted plugin storage and are never shown again after saving. Each new host needs your approval the first time it is used.

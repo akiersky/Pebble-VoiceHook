@@ -136,7 +136,7 @@ test('the watchapp manifest lists each screen platform and every resource file e
   const screens = JSON.parse(fs.readFileSync(path.join(root, 'app/screens.json'), 'utf8'));
   assert.deepStrictEqual(app.targetPlatforms, screens.flatMap((screen) => screen.platforms));
   const permissions = app.usesPermissions.map((p) => p.name);
-  assert.deepStrictEqual(permissions, ['Timeline', 'InvokeAction']);
+  assert.deepStrictEqual(permissions, ['InvokeAction']);
   for (const entry of app.resources.media) {
     assert.ok(fs.existsSync(path.join(root, 'app/resources', entry.file)), entry.file);
   }

@@ -1,7 +1,7 @@
 {
   "name": "voicehook-plugin",
   "author": "kiersky",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -16,13 +16,6 @@
     "displayName": "Webhook Actions",
     "uuid": "020583bc-828e-454c-b579-de76d60ec3e6",
     "sdkVersion": "3",
-    "usesPermissions": [
-      {
-        "name": "Timeline",
-        "reason": "To put a \"Send note\" pin on your watch's timeline",
-        "required": false
-      }
-    ],
     "plugin": {
       "description": "Sends your notes and button commands to URLs you choose, as POST requests with the headers you set. Use it to feed notes, todos, ideas and triggers from your Pebble into your own server, automation or note system.",
       "script": "src/plugin/index.js",

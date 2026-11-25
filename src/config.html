@@ -152,12 +152,6 @@
       <p class="hint" id="reminderHint">The reminder is shown in large text on the watch with an arrow at the button, so keep it to about 8 characters. List the press, double press and hold in order, for example <code>Lights · Fan · Off</code>.</p>
     </section>
 
-    <section id="pinSection">
-      <h2>Timeline pin</h2>
-      <p class="hint" style="margin: 0 0 12px;">Adds a "Send note" pin to your watch's timeline. Open it, say your note, and it goes to your voice-note webhook.</p>
-      <button id="pin" class="secondary" type="button" style="width: 100%;">Add "Send note" pin to my watch</button>
-    </section>
-
     <footer>
       <button id="unlink" class="danger" type="button">Clear all settings</button>
     </footer>
@@ -171,7 +165,7 @@
   <script>
     // ---- shared contract: generated from src/contract.js by `npm run contract`, do not edit ----
 var Contract = {
-  MESSAGES: { STATUS: 'status', SAVE: 'save', TEST: 'test', PIN: 'pin', UNLINK: 'unlink' },
+  MESSAGES: { STATUS: 'status', SAVE: 'save', TEST: 'test', UNLINK: 'unlink' },
   LIMITS: { HEADERS: 10, DESTINATIONS: 10, LABEL: 24, COMMAND: 100, HEADER_NAME: 100, HEADER_VALUE: 2000, URL: 2000, TEXT: 8000, NAME: 40 },
   TARGETS: { DESTINATION: 'destination', COMMAND: 'command', NOTE: 'note', LABEL: 'label' },
   FIELDS: { URL: 'url', HEADERS: 'headers', JSON_FIELD: 'field', COMMAND: 'command', DESTINATION: 'destination', UP: 'up', DOWN: 'down' },
@@ -275,7 +269,6 @@ var Contract = {
     function commandRows() { return Array.prototype.slice.call(commandsUp.children).concat(Array.prototype.slice.call(commandsDown.children)); }
     var saveButton = document.getElementById('save');
     var unlinkButton = document.getElementById('unlink');
-    var pinButton = document.getElementById('pin');
     var addDestinationButton = document.getElementById('addDestination');
     var statusElement = document.getElementById('status');
     var summaryElement = document.getElementById('summary');
@@ -663,9 +656,8 @@ var Contract = {
       document.getElementById('reminderUp').hidden = !HAS_WATCHAPP;
       document.getElementById('reminderDown').hidden = !HAS_WATCHAPP;
       document.getElementById('reminderHint').hidden = !HAS_WATCHAPP;
-      document.getElementById('pinSection').hidden = HAS_WATCHAPP;
       if (!HAS_WATCHAPP) {
-        document.getElementById('noteHint').textContent = 'Used by the timeline pin below, and by any app that sends a note through this plugin.';
+        document.getElementById('noteHint').textContent = 'Used by any app that sends a note through this plugin.';
         document.getElementById('commandsHint').textContent = 'Fixed commands that watch apps can send through this plugin. Leave one empty to turn it off.';
       }
     }
@@ -761,16 +753,6 @@ var Contract = {
       if (destinationsBox.children.length >= Contract.LIMITS.DESTINATIONS) { setStatus('You can have up to ' + Contract.LIMITS.DESTINATIONS + ' webhooks.', 'error'); return; }
       addDestination({}, true);
       markDirty();
-    };
-
-    pinButton.onclick = async function () {
-      setBusy(true);
-      try {
-        var result = await send({ type: Contract.MESSAGES.PIN });
-        setStatus(result.error || result.message, result.error ? 'error' : 'ok');
-      } catch (error) {
-        setStatus('Could not contact the ' + PRODUCT + ' plugin. Try reopening this page.', 'error');
-      } finally { setBusy(false); restoreFocus(pinButton, saveButton); }
     };
 
     twoStep(unlinkButton, 'Tap again to clear everything', async function () {

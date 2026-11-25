@@ -7,7 +7,6 @@ async function start(options) {
   options = options || {};
   const store = options.store || {};
   const fetches = [];
-  const pins = [];
   const sent = [];
   let configHandler;
   let actionHandler;
@@ -20,7 +19,6 @@ async function start(options) {
       removeItem: async (key) => { delete store[key]; },
     },
     permissions: { query: async () => options.permission || 'granted' },
-    insertTimelinePin: async (pin) => { pins.push(pin); },
   };
   global.fetch = async (url, init) => {
     fetches.push({ url, options: init });
@@ -53,7 +51,7 @@ async function start(options) {
   const type = (input, value) => { input.value = value; input.dispatchEvent(new window.Event('input', { bubbles: true })); };
   const click = async (element) => { element.click(); await settle(); };
   const action = (request) => new Promise((resolve) => actionHandler(request, { ok: (r) => resolve({ ok: true, ...r }), error: (code, message) => resolve({ ok: false, code, message }) }));
-  return { window, document, store, fetches, pins, sent, type, click, settle, action };
+  return { window, document, store, fetches, sent, type, click, settle, action };
 }
 
 module.exports = { start };
