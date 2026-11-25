@@ -8,7 +8,7 @@ check everything first. Copy for both listings is in `app/store-assets/listing.m
 ## Before the first release
 - [x] Public source repository: https://github.com/akiersky/Pebble-VoiceHook (the "source code URL" for both listings; one repo holds the plugin and the watchapp).
 - [x] Licence: MIT (`LICENSE`). The icons are Apache-2.0, see `app/resources/images/ATTRIBUTION.md`.
-- [ ] Set `version` to `1.0.0` in `package.json` (plugin) and `app/package.base.json` (watchapp). The store wants
+- [x] Set `version` to `1.0.0` in `package.json` (plugin) and `app/package.base.json` (watchapp). The store wants
       `major.minor.0`, so development builds (`0.1.x`) are not published. Each later release needs a new version.
 - [ ] `author` is `kiersky` in both manifests.
 - [ ] Run `npm test`, then `app/sync.sh` and `pebble clean && pebble build` in `app/` and in the root (a clean build, so no screenshot-mode objects linger).
@@ -41,3 +41,7 @@ Use the text in `app/store-assets/listing-plugin.md`.
 - Install it from the store on a phone and watch and repeat the checks above.
 - Keep the UUIDs forever: they tie future releases to the listings.
 - After the listing is live, add its appstore link to `README.md`.
+
+## Published
+- VoiceHook 1.0.0 (2026-11-25): https://apps.rePebble.com/1852e4511e1548b997838e12, UUID c0756590-bd59-464d-82f3-acd4499077d4. The first attempts with the full description and all 12 screenshots failed with a 500; it succeeded with a short description and 2 basalt screenshots, the rest added in the dashboard.
+- Webhook Actions 1.0.0 (2026-11-25): https://apps.rePebble.com/753416d1f8cc403cb3406391, UUID 020583bc-828e-454c-b579-de76d60ec3e6.

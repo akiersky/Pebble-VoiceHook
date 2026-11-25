@@ -6,6 +6,8 @@ Up and Down send fixed commands, six in all.
 
 It has no server, no account and no analytics: messages go only to the webhooks you enter.
 
+Get it on the Pebble appstore: [VoiceHook](https://apps.rePebble.com/1852e4511e1548b997838e12) (the watchapp, with the plugin included) or [Webhook Actions](https://apps.rePebble.com/753416d1f8cc403cb3406391) (the plugin alone, for other apps).
+
 <table>
 <tr>
 <td align="center" valign="top"><img src="docs/images/watch.png" alt="The VoiceHook watch screen, and the confirmation after a note is sent" width="460"><br><sub>On the watch: ready, and sent</sub></td>
