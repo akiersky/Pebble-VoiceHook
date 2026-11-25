@@ -14,6 +14,8 @@ Tools & Utilities
 ## Description
 Send voice notes and one-press commands from your Pebble to any URL you choose.
 
+VoiceHook includes the Webhook Actions plugin, which does the sending from your phone. The watch app asks for its "InvokeAction" permission to use it, and other watch apps can use the same plugin.
+
 Press Select, say your note, and it is sent as an HTTP POST to your own webhook, with the headers you set (for example an Authorization token). Up and Down send fixed commands with a press, a double press or a hold, six in all, each to the webhook you pick. Use it to feed notes, to-dos and triggers into your own server, home automation or note system, or any service that accepts a webhook.
 
 SET UP IN A MINUTE
@@ -32,7 +34,7 @@ HIGHLIGHTS
 PRIVATE BY DESIGN
 Messages go only to the URLs you enter. Nothing is sent to the developer or to any third party, and there are no accounts or analytics. Webhook URLs and header values are kept in your phone's encrypted plugin storage and are never shown again after you save them. Your phone asks your permission the first time VoiceHook connects to each new host.
 
-Needs the Pebble mobile app with plugin support (version 2.0 or later) and a watch with a microphone. Includes the Webhook Actions plugin, which other watch apps can also use to send to your webhooks (they can't see your headers or choose another address, and the plugin answers at most one request per second per action).
+Needs the Pebble mobile app with plugin support (version 2.0 or later) and a watch with a microphone. Other watch apps can also use the bundled Webhook Actions plugin to send to your webhooks (they can't see your headers or choose another address, and the plugin answers at most one request per second per action).
 
 ## Release notes (1.0.0)
 First release: voice notes, six button commands, multiple webhooks with custom headers, and a settings page on your phone.
