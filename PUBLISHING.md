@@ -45,3 +45,4 @@ Use the text in `app/store-assets/listing-plugin.md`.
 ## Published
 - VoiceHook 1.0.0 (2026-11-25): https://apps.rePebble.com/1852e4511e1548b997838e12, UUID c0756590-bd59-464d-82f3-acd4499077d4. The first attempts with the full description and all 12 screenshots failed with a 500; it succeeded with a short description and 2 basalt screenshots, the rest added in the dashboard.
 - Webhook Actions 1.0.0 (2026-11-25): https://apps.rePebble.com/753416d1f8cc403cb3406391, UUID 020583bc-828e-454c-b579-de76d60ec3e6.
+- 1.0.1 (2026-11-25) for both: removed the timeline pin and the Timeline permission.
