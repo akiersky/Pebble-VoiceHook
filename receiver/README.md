@@ -1,6 +1,6 @@
 # VoiceHook receiver
 
-A small server that takes the webhooks VoiceHook (or any app using Webhook Actions) sends and appends them to
+An optional small server that takes the webhooks VoiceHook (or any app using Webhook Actions) sends and appends them to
 plain Markdown files. One file, no dependencies, Node 18 or later.
 
 ```

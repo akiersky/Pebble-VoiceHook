@@ -6,6 +6,8 @@ Up and Down send fixed commands, six in all.
 
 It has no server, no account and no analytics: messages go only to the webhooks you enter.
 
+Where notes can go: any URL that takes a POST. [`docs/MEMOS.md`](docs/MEMOS.md) sets it up with [Memos](https://usememos.com) (no extra server needed), and [`receiver/`](receiver/README.md) is a small server that appends them to daily Markdown files.
+
 Get it on the Pebble appstore: [VoiceHook](https://apps.rePebble.com/1852e4511e1548b997838e12) (the watchapp, with the plugin included) or [Webhook Actions](https://apps.rePebble.com/753416d1f8cc403cb3406391) (the plugin alone, for other apps).
 
 <table>
