@@ -438,12 +438,13 @@ var Contract = {
       addHeader.style.width = '100%';
       addHeader.onclick = function () { addHeaderRowChecked(headers); };
       var format = el('select', {}, [
-        el('option', { value: 'json', textContent: 'JSON with text, timestamp and source' }),
+        el('option', { value: 'json', textContent: 'JSON with the note, timestamp and source' }),
         el('option', { value: 'text', textContent: 'Plain text, just the message' })
       ]);
       format.value = data.format || 'json';
       var field = el('input', { type: 'text', autocomplete: 'off', autocapitalize: 'none', spellcheck: false, value: data.field || 'text' });
-      var fieldWrap = el('div', {}, labelled('JSON field for notes', field));
+      var fieldHint = el('p', { className: 'hint', textContent: 'The name of the JSON field that holds the note: text by default, or content for Memos.' });
+      var fieldWrap = el('div', {}, labelled('JSON field for notes', field).concat([fieldHint]));
       format.onchange = function () { fieldWrap.hidden = format.value !== 'json'; };
       fieldWrap.hidden = format.value !== 'json';
       var test = el('button', { type: 'button', className: 'secondary', textContent: 'Save & send test message' });
