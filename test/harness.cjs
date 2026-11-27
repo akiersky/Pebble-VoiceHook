@@ -51,7 +51,8 @@ async function start(options) {
   const type = (input, value) => { input.value = value; input.dispatchEvent(new window.Event('input', { bubbles: true })); };
   const click = async (element) => { element.click(); await settle(); };
   const action = (request) => new Promise((resolve) => actionHandler(request, { ok: (r) => resolve({ ok: true, ...r }), error: (code, message) => resolve({ ok: false, code, message }) }));
-  return { window, document, store, fetches, sent, type, click, settle, action };
+  const announceReady = async () => { await ready({ target: 'plugin' }); await settle(); };
+  return { window, document, store, fetches, sent, type, click, settle, action, announceReady };
 }
 
 module.exports = { start };

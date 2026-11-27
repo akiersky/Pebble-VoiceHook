@@ -370,3 +370,20 @@ test('header values are hidden until the eye is pressed, and a saved value stays
   assert.strictEqual(saved.children[1].type, 'password', 'nothing to show, so it stays hidden');
   assert.match(t.document.querySelector('#status').textContent, /stays hidden/);
 });
+
+test('a second ready from the Pebble app does not reset the page', async () => {
+  const t = await start({ store: { 'webhook.config.v2': JSON.stringify({
+    v: 2, destinations: [{ id: 'a', name: 'Notes', url: 'https://x.test/h', host: 'x.test', https: true, headers: [], format: 'json', field: 'text' }],
+    noteDestination: 'a', commands: {}, labels: { up: '', down: '' },
+  }) } });
+  const card = t.document.querySelector('#destinations details');
+  card.open = true;
+  const url = card.querySelector('input[type=url]');
+  t.type(url, 'https://typed.example/hook');
+  await t.announceReady();
+  const after = t.document.querySelector('#destinations details');
+  assert.strictEqual(after, card);                                  // the same card, not a rebuilt one
+  assert.ok(after.open);
+  assert.strictEqual(after.querySelector('input[type=url]').value, 'https://typed.example/hook');
+  assert.match(t.document.querySelector('#dirty').textContent, /Unsaved/);
+});

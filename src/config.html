@@ -767,9 +767,20 @@ var Contract = {
       } finally { setBusy(false); restoreFocus(unlinkButton, saveButton); }
     });
 
+    // The Pebble app can announce 'ready' again while the page is open (when the plugin restarts or the app comes
+    // back to the front). Showing the saved settings again would collapse the cards and wipe unsaved typing, so
+    // the page shows them once, and tries again only if that first load did not work.
+    var loaded = false;
+    var loading = false;
     Pebble.addEventListener('ready', async function (event) {
-      if (event.target !== 'plugin') return;
-      showState(await send({ type: Contract.MESSAGES.STATUS }));
+      if (event.target !== 'plugin' || loaded || loading) return;
+      loading = true;
+      try {
+        showState(await send({ type: Contract.MESSAGES.STATUS }));
+        loaded = true;
+      } catch (error) {
+        setStatus('Could not load your settings. Try reopening this page.', 'error');
+      } finally { loading = false; }
     });
   </script>
 </body>
