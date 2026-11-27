@@ -47,3 +47,4 @@ Use the text in `app/store-assets/listing-plugin.md`.
 - Webhook Actions 1.0.0 (2026-11-25): https://apps.rePebble.com/753416d1f8cc403cb3406391, UUID 020583bc-828e-454c-b579-de76d60ec3e6.
 - 1.0.1 (2026-11-25) for both: removed the timeline pin and the Timeline permission.
 - 1.0.2 (2026-11-27) for both: settings page stacks each header's name above its value, with the remove and show/hide buttons beside them.
+- 1.0.3 (2026-11-27) for both: settings page no longer resets while open; clearer JSON note-field label and hint.
