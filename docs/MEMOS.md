@@ -13,6 +13,11 @@ Checked against Memos 26.11.2: its create-memo endpoint accepts the JSON VoiceHo
    - Format: JSON, with the field name set to `content`
 5. Choose it as the voice-note webhook and tap "Save & send test message". A memo should appear.
 
+If the address is behind Cloudflare Access, the watch can't sign in through a browser page. Add a separate Access
+application for just `<your memos address>/api/memos` with a Service Auth policy for a service token, and add two more
+headers to the webhook: `CF-Access-Client-Id` and `CF-Access-Client-Secret`. Without them Access answers 403; with them
+the request reaches Memos, which still needs its own token.
+
 Notes arrive as private memos stamped with the time they reach Memos. A `#hashtag` in a dictated note becomes a tag.
 Older Memos versions used `/api/v1/memos`; 26.11 removed it, so use `/api/memos`.
 
